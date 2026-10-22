@@ -349,7 +349,7 @@ private struct EdgeSwipe: ViewModifier {
                     .frame(width: 50, height: 50)
                     .background(a.tint, in: Circle())
                     .scaleEffect(armed ? 1.1 : 0.6 + 0.4 * progress)
-                Text(a.title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                Text(a.title).font(.caption2.weight(.medium)).foregroundStyle(.primary).lineLimit(1)
             }
             .opacity(progress)
             .frame(width: max(slot, abs(offset)), alignment: armed ? (offset > 0 ? .trailing : .leading) : .center)
