@@ -72,14 +72,15 @@ func relationType(_ r: Relation, viewer: Int) -> String {
 }
 
 /**
- Права в проекте задачи. known = false — ещё не спрашивали: действия скрыты (не мигаем кнопкой,
- которую тут же уберём). set = nil — сервер прав не сообщил: показываем и разбираем отказ по факту.
+ Права в проекте задачи. Пока не известны (known = false: ответ с ролями весит мегабайт и идёт секунды,
+ а капча WAF может его не пустить) или сервер их не сообщил (set = nil) — действия видны,
+ отказ разбираем по факту: прятать «Комментарий» до ответа — значит не дать прокомментировать вовсе.
  */
 struct IssuePerms: Equatable, Sendable {
     var known = false
     var set: Set<String>?
 
-    func has(_ p: String) -> Bool { known && (set == nil || set!.contains("*") || set!.contains(p)) }
+    func has(_ p: String) -> Bool { set == nil || set!.contains("*") || set!.contains(p) }
     /// nil — права не спрашивали или сервер их не сообщил.
     func state(_ p: String) -> Bool? {
         guard known, let set else { return nil }
@@ -87,7 +88,7 @@ struct IssuePerms: Equatable, Sendable {
     }
     /// Право «на любое» или «на своё»; когда права неизвестны, решает unknown.
     func hasOwn(_ any: String, _ own: String, mine: Bool, unknown: Bool? = nil) -> Bool {
-        known && (set == nil ? (unknown ?? mine) : has(any) || (mine && has(own)))
+        set == nil ? (unknown ?? mine) : has(any) || (mine && has(own))
     }
     func editIssue(_ i: Issue, me: Int) -> Bool { hasOwn("edit_issues", "edit_own_issues", mine: i.author.id == me, unknown: true) }
     func editNote(_ j: Journal, me: Int) -> Bool { hasOwn("edit_issue_notes", "edit_own_issue_notes", mine: j.user?.id == me) }

@@ -15,48 +15,39 @@ struct CommentSheet: View {
     private var text: Binding<String> { editing != nil ? $model.editText : $model.draft }
     private var dirty: Bool { editing != nil ? model.editText != (editing?.notes ?? "") : false }
 
+    @State private var preview = false
+
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextileEditor(text: text, attachments: model.issue?.attachments ?? [],
-                                  pendingNames: model.draftFiles.map(\.name))
-                }
-                if editing == nil && !model.draftFiles.isEmpty {
-                    Section("Files") {
-                        ForEach(model.draftFiles) { f in
-                            Label(f.name, systemImage: "doc")
-                                .swipeActions { Button(role: .destructive) { model.draftFiles.removeAll { $0 == f } } label: { Label("Remove", systemImage: "trash") } }
-                        }
-                    }
-                }
-                Section {
-                    privacy
-                } footer: {
-                    if let note = privacyNote { Text(note).foregroundStyle(lockedPrivate ? Color.secondary : Color.red) }
+            // как compose в Mail: служебный ряд сверху, под ним текст во весь лист; разметка — над клавиатурой
+            VStack(spacing: 0) {
+                options
+                Divider()
+                TextileEditor(text: text, attachments: model.issue?.attachments ?? [],
+                              pendingNames: model.draftFiles.map(\.name), previewMode: $preview, fills: true)
+                    .padding(.top, 8)
+                if editing == nil && !model.draftFiles.isEmpty { files }
+                if let note = privacyNote {
+                    Text(note)
+                        .font(.footnote)
+                        .foregroundStyle(lockedPrivate ? Color.secondary : Color.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16).padding(.vertical, 8)
                 }
             }
             .navigationTitle(editing != nil ? "Edit comment" : "Comment")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    SheetCancelButton {
                         if dirty { confirmDiscard = true } else { if editing != nil { model.editingJournal = nil }; dismiss() }
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(editing != nil ? "Save" : "Send") {
+                    SheetConfirmButton(editing != nil ? "Save" : "Send", systemImage: editing != nil ? "checkmark" : "arrow.up") {
                         Task { if await model.sendComment(app) { dismiss() } }
                     }
                     .disabled(model.busy || blocked || (text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && model.draftFiles.isEmpty && editing == nil))
-                }
-                if editing == nil {
-                    ToolbarItem(placement: .bottomBar) {
-                        Menu {
-                            PhotosPicker(selection: $photoItems, matching: .any(of: [.images, .videos])) { Label("Photo Library", systemImage: "photo.on.rectangle") }
-                            Button { importing = true } label: { Label("Choose File", systemImage: "folder") }
-                        } label: { Label("Attach files", systemImage: "paperclip") }
-                    }
                 }
             }
             .overlay { if model.busy { ProgressView().controlSize(.large) } }
@@ -76,6 +67,48 @@ struct CommentSheet: View {
         .presentationDetents([.large])
     }
 
+    /// Приватность, файлы, предпросмотр — кнопки-переключатели одним рядом, видны и при открытой клавиатуре.
+    private var options: some View {
+        HStack(spacing: 8) {
+            privacy
+            if editing == nil {
+                Menu {
+                    PhotosPicker(selection: $photoItems, matching: .any(of: [.images, .videos])) { Label("Photo Library", systemImage: "photo.on.rectangle") }
+                    Button { importing = true } label: { Label("Choose File", systemImage: "folder") }
+                } label: { Label("Attach files", systemImage: "paperclip").labelStyle(.iconOnly) }
+                .buttonStyle(.bordered)
+            }
+            Spacer()
+            Toggle(isOn: $preview) { Label("Preview", systemImage: "eye").labelStyle(.iconOnly) }
+                .toggleStyle(.button)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.capsule)
+        .padding(.horizontal, 16).padding(.vertical, 8)
+    }
+
+    private var files: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(model.draftFiles) { f in
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc").accessibilityHidden(true)
+                        Text(f.name).lineLimit(1)
+                        Button { model.draftFiles.removeAll { $0 == f } } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text("Remove \(f.name)"))
+                    }
+                    .font(.footnote)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(Color(.secondarySystemFill), in: Capsule())
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 8)
+        }
+    }
+
     // пометку «приватно» сервер принимает только с правом set_notes_private и молча отбрасывает без него
     private var mayPrivate: Bool? { model.perms.state("set_notes_private") }
     private var lockedPrivate: Bool { editing?.privateNotes == true && mayPrivate == false }
@@ -84,7 +117,8 @@ struct CommentSheet: View {
     @ViewBuilder
     private var privacy: some View {
         if !lockedPrivate && (model.perms.has("set_notes_private") || model.commentPrivate) {
-            Toggle(isOn: $model.commentPrivate) { Label("Private note", systemImage: "lock") }
+            Toggle(isOn: $model.commentPrivate) { Label("Private note", systemImage: model.commentPrivate ? "lock.fill" : "lock.open") }
+                .toggleStyle(.button)
         } else if lockedPrivate {
             Label("Private note", systemImage: "lock.fill").foregroundStyle(.secondary)
         }
@@ -130,9 +164,9 @@ struct UploadSheet: View {
             .navigationTitle("Add files")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Upload (\(files.count))") {
+                    SheetConfirmButton("Upload (\(files.count))", systemImage: "arrow.up") {
                         Task { if await model.uploadFiles(files, description: description, app) { dismiss() } }
                     }
                     .disabled(files.isEmpty || model.busy)
@@ -165,7 +199,9 @@ struct TimeSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Hours", text: $hours).keyboardType(.decimalPad)
+                LabeledContent("Hours") {
+                    TextField("0", text: $hours).keyboardType(.numbersAndPunctuation).multilineTextAlignment(.trailing)
+                }
                 if !model.activities.isEmpty {
                     Picker("Activity", selection: $activity) {
                         ForEach(model.activities) { Text($0.name).tag(Optional($0.id)) }
@@ -177,9 +213,9 @@ struct TimeSheet: View {
             .navigationTitle(entry == nil ? "Log time" : "Edit time entry")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    SheetConfirmButton("Save") {
                         guard let v = value else { return }
                         Task {
                             if await model.saveTime(entry, hours: v, activityId: activity, comment: comment, spentOn: Fmt.day(date), app) { dismiss() }
@@ -228,15 +264,17 @@ struct RelationSheet: View {
                     }
                 }
                 if type == "precedes" || type == "follows" {
-                    TextField("Delay, days", text: $delay).keyboardType(.numberPad)
+                    LabeledContent("Delay, days") {
+                        TextField("0", text: $delay).keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                    }
                 }
             }
             .navigationTitle("Add relation")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    SheetConfirmButton("Add") {
                         guard let t = target else { return }
                         Task { if await model.addRelation(type: type, to: t.id, delay: Int(delay), app) { dismiss() } }
                     }
@@ -293,7 +331,7 @@ struct PersonCard: View {
             }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { SheetConfirmButton("Done") { dismiss() } } }
             .task {
                 guard let refs = app.refs else { return }
                 do { person = try await refs.person(userId) } catch { self.error = error.localizedDescription }

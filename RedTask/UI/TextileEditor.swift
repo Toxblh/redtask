@@ -8,8 +8,13 @@ struct TextileEditor: View {
     /// Файлы черновика — их тоже можно вставить картинкой по имени.
     var pendingNames: [String] = []
     var placeholder: LocalizedStringKey = "Comment"
+    /// Режим предпросмотра снаружи (лист комментария держит переключатель у себя); nil — свой сегмент сверху.
+    var previewMode: Binding<Bool>? = nil
+    /// Во весь лист (комментарий) — без минимальной высоты строки формы, фокус сразу.
+    var fills = false
     @State private var selection: TextSelection?
-    @State private var preview = false
+    @State private var ownPreview = false
+    private var preview: Bool { previewMode?.wrappedValue ?? ownPreview }
     @State private var linkAlert = false
     @State private var linkURL = ""
     @State private var linkText = ""
@@ -20,12 +25,14 @@ struct TextileEditor: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            SwiftUI.Picker("Mode", selection: $preview) {
-                Text("Write").tag(false)
-                Text("Preview").tag(true)
+            if previewMode == nil {
+                SwiftUI.Picker("Mode", selection: $ownPreview) {
+                    Text("Write").tag(false)
+                    Text("Preview").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
             if preview {
                 ScrollView {
                     if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -34,11 +41,14 @@ struct TextileEditor: View {
                         RichText(text: text, context: RichContext(attachments: attachments, baseURL: app.api?.baseURL))
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+                .frame(maxWidth: .infinity, minHeight: fills ? nil : 160, maxHeight: fills ? .infinity : nil, alignment: .topLeading)
             } else {
                 TextEditor(text: $text, selection: $selection)
                     .focused($focused)
-                    .frame(minHeight: 160)
+                    // ширину — явно: в строке формы редактор иначе сжимается до ширины пары букв
+                    .frame(maxWidth: .infinity, minHeight: fills ? nil : 160, maxHeight: fills ? .infinity : nil)
+                    .padding(.horizontal, fills ? 12 : 0)
+                    .onAppear { if fills { focused = true } }
                     .overlay(alignment: .topLeading) {
                         if text.isEmpty {
                             Text(placeholder).foregroundStyle(.tertiary).padding(.top, 8).padding(.leading, 5).allowsHitTesting(false)
@@ -49,8 +59,10 @@ struct TextileEditor: View {
                         text = t
                         setCursor(pos..<pos)
                     }
-                    .toolbar {
-                        ToolbarItemGroup(placement: .keyboard) { toolbarButtons }
+                    // панель разметки — полосой над клавиатурой, пока поле в фокусе. Не .toolbar(.keyboard):
+                    // прокручиваемый ряд там сжимается до пары кнопок или не показывается вовсе
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        if focused { formatBar }
                     }
             }
         }
@@ -74,6 +86,15 @@ struct TextileEditor: View {
             case .issue: IssuePicker(title: "Link to issue") { issue in apply { TextileEdit.insert($0, $1, "#\(issue.id) ") } }
             }
         }
+    }
+
+    private var formatBar: some View {
+        VStack(spacing: 0) {
+            Divider()
+            toolbarButtons
+                .frame(height: 44)
+        }
+        .background(.bar)
     }
 
     @ViewBuilder
@@ -103,7 +124,9 @@ struct TextileEditor: View {
                 }
             }
             .labelStyle(.iconOnly)
-            .padding(.horizontal, 4)
+            .imageScale(.large)
+            .frame(minHeight: 44)
+            .padding(.horizontal, 12)
         }
     }
 
@@ -172,7 +195,7 @@ struct PeoplePicker: View {
             .navigationTitle("Mention someone")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Name or login"))
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } } }
             .task(id: query) {
                 guard query.count >= 2, let api = app.api else { people = []; return }
                 try? await Task.sleep(for: .milliseconds(300))
@@ -212,7 +235,7 @@ struct IssuePicker: View {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Issue: number or subject"))
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } } }
             .task(id: query) {
                 guard !query.isEmpty, let api = app.api else { found = []; return }
                 try? await Task.sleep(for: .milliseconds(350))

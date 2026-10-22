@@ -181,10 +181,24 @@
       }
     },
     "%lld." : {
-
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld."
+          }
+        }
+      }
     },
     "%lld%%" : {
-
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld%%"
+          }
+        }
+      }
     },
     "•" : {
 
@@ -198,6 +212,9 @@
           }
         }
       }
+    },
+    "0" : {
+
     },
     "A client for your Redmine server" : {
       "localizations" : {
@@ -499,6 +516,16 @@
         }
       }
     },
+    "Change status" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сменить статус"
+          }
+        }
+      }
+    },
     "Changes" : {
       "localizations" : {
         "ru" : {
@@ -705,6 +732,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Не удалось обновить — показан сохранённый список. Нажмите, чтобы повторить."
+          }
+        }
+      }
+    },
+    "Couldn’t refresh: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось обновить: %@"
           }
         }
       }
@@ -1221,6 +1258,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Фильтр проектов"
+          }
+        }
+      }
+    },
+    "Find parent issue" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Найти родительскую задачу"
           }
         }
       }
@@ -1745,6 +1792,16 @@
         }
       }
     },
+    "None" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет"
+          }
+        }
+      }
+    },
     "Not assigned" : {
       "localizations" : {
         "ru" : {
@@ -2226,11 +2283,22 @@
       }
     },
     "Remove" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Убрать"
+          }
+        }
+      }
+    },
+    "Remove %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Убрать %@"
           }
         }
       }
@@ -2591,6 +2659,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Смена статуса"
+          }
+        }
+      }
+    },
+    "Status: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Статус: %@"
           }
         }
       }

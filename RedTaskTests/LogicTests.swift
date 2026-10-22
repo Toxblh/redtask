@@ -88,7 +88,8 @@ struct ActivityTests {
 
     @Test func permissions() {
         let none = IssuePerms()
-        #expect(!none.has("add_issue_notes"))
+        // права ещё не пришли — действия видны, отказ разбирается по факту
+        #expect(none.has("add_issue_notes"))
         let unknown = IssuePerms(known: true, set: nil)
         #expect(unknown.has("anything") && unknown.state("set_notes_private") == nil)
         let some = IssuePerms(known: true, set: ["edit_own_issue_notes"])

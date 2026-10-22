@@ -226,3 +226,31 @@ struct SafariView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
     func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }
+
+/// Кнопки краёв листа. iOS 26+: круглые ✕ и ✓ (как в системных листах) — заголовок листа не теснят
+/// длинные «Отменить»/«Сохранить»; раньше — привычный текст.
+struct SheetCancelButton: View {
+    let action: () -> Void
+    init(_ action: @escaping () -> Void) { self.action = action }
+    var body: some View {
+        if #available(iOS 26, *) { Button(role: .cancel, action: action) } else { Button("Cancel", action: action) }
+    }
+}
+
+struct SheetConfirmButton: View {
+    let title: LocalizedStringKey
+    var systemImage = "checkmark"
+    let action: () -> Void
+    init(_ title: LocalizedStringKey, systemImage: String = "checkmark", _ action: @escaping () -> Void) {
+        self.title = title; self.systemImage = systemImage; self.action = action
+    }
+    var body: some View {
+        if #available(iOS 26, *) {
+            Button(action: action) { Label(title, systemImage: systemImage) }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.glassProminent)
+        } else {
+            Button(title, action: action).fontWeight(.semibold)
+        }
+    }
+}

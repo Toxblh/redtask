@@ -100,6 +100,7 @@ struct EditIssueView: View {
     @State private var categoryId = 0
     @State private var versionId = 0
     @State private var parent = ""
+    @State private var pickParent = false
     @State private var startDate = ""
     @State private var dueDate = ""
     @State private var estimate = ""
@@ -158,16 +159,29 @@ struct EditIssueView: View {
                         Text("—").tag(0)
                         ForEach(versionsWithCurrent) { Text($0.name).tag($0.id) }
                     }
-                    TextField("Parent issue", text: $parent).keyboardType(.numberPad)
-                        .foregroundStyle(parentId == nil ? Color.red : Color.primary)
+                    // подпись остаётся видна и у заполненного поля (HIG → Text fields: плейсхолдер — не подпись)
+                    LabeledContent("Parent issue") {
+                        HStack(spacing: 8) {
+                            TextField("None", text: $parent)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(parentId == nil ? Color.red : Color.primary)
+                            Button { pickParent = true } label: { Image(systemName: "magnifyingglass") }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel(Text("Find parent issue"))
+                        }
+                    }
                 }
                 Section {
                     OptionalDateRow(title: "Start date", value: $startDate)
                     OptionalDateRow(title: "Due date", value: $dueDate)
-                    TextField("Estimate, h", text: $estimate).keyboardType(.decimalPad)
-                        .foregroundStyle(estimateText.isEmpty || Double(estimateText) != nil ? Color.primary : Color.red)
+                    LabeledContent("Estimate, h") {
+                        TextField("None", text: $estimate).keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .foregroundStyle(estimateText.isEmpty || Double(estimateText) != nil ? Color.primary : Color.red)
+                    }
                     Picker("Progress", selection: $doneRatio) {
-                        ForEach(Array(stride(from: 0, through: 100, by: 10)), id: \.self) { Text("\($0)%").tag($0) }
+                        ForEach(Array(Set(stride(from: 0, through: 100, by: 10)).union([doneRatio])).sorted(), id: \.self) { Text("\($0)%").tag($0) }
                     }
                     if perms.has("set_issues_private") || perms.has("set_own_issues_private") || isPrivate {
                         Toggle("Private issue", isOn: $isPrivate)
@@ -183,13 +197,16 @@ struct EditIssueView: View {
                 }
             }
             .navigationTitle("Edit issue")
+            .sheet(isPresented: $pickParent) {
+                IssuePicker(title: "Parent issue", exclude: [issue.id]) { parent = String($0.id) }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { if dirty { confirmDiscard = true } else { dismiss() } }
+                    SheetCancelButton { if dirty { confirmDiscard = true } else { dismiss() } }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }.disabled(!valid || busy || !dirty)
+                    SheetConfirmButton("Save") { Task { await save() } }.disabled(!valid || busy || !dirty)
                 }
             }
             .overlay { if busy { ProgressView().controlSize(.large) } }
@@ -391,7 +408,9 @@ struct NewIssueView: View {
                     }
                     OptionalDateRow(title: "Start date", value: $startDate)
                     OptionalDateRow(title: "Due date", value: $dueDate)
-                    TextField("Estimate, h", text: $estimate).keyboardType(.decimalPad)
+                    LabeledContent("Estimate, h") {
+                        TextField("None", text: $estimate).keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                    }
                     Toggle("Private issue", isOn: $isPrivate)
                 }
                 if !fields.isEmpty {
@@ -414,10 +433,10 @@ struct NewIssueView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { if dirty { confirmDiscard = true } else { dismiss() } }
+                    SheetCancelButton { if dirty { confirmDiscard = true } else { dismiss() } }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") { Task { await create() } }
+                    SheetConfirmButton("Create") { Task { await create() } }
                         .disabled(busy || project == nil || trackerId == nil)
                 }
             }

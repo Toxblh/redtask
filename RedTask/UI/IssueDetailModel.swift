@@ -76,6 +76,8 @@ final class IssueDetailModel {
     private(set) var perms = IssuePerms()
     private(set) var loading = false
     private(set) var error: String?
+    /// Не удалось сверить с сервером — показан кэш.
+    private(set) var refreshError: String?
     var busy = false
     var actionError: String?
     /// Статусы/приоритеты/участники/версии — для подписей журналов и форм.
@@ -121,11 +123,13 @@ final class IssueDetailModel {
             issue = fresh
             timeEntries = times
             error = nil
+            refreshError = nil
             await IssueCache.save(app.account, IssueSnapshot(issue: fresh, timeEntries: times))
             Task { await loadExtras(app, fresh) }
         } catch {
             if (error as? URLError)?.code == .cancelled || error is CancellationError { return }
-            if issue == nil { self.error = error.localizedDescription } else { actionError = error.localizedDescription }
+            // задача уже на экране (кэш) — не модальный алерт, а строка в шапке: обновление фоновое, работать оно не мешает
+            if issue == nil { self.error = error.localizedDescription } else { refreshError = error.localizedDescription }
         }
     }
 

@@ -33,7 +33,7 @@ enum DetailSheet: Identifiable {
 struct IssueDetailView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.openURL) private var openURL
-    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.horizontalSizeClass) private var hSize
     let issueId: Int
     var note: Int?
     var newSubtask: (Issue) -> Void = { _ in }
@@ -67,17 +67,20 @@ struct IssueDetailView: View {
                 }
             }
             .task {
-                await model.load(app)
-                if let note { scroll(to: note, proxy) }
                 #if DEBUG
                 switch UserDefaults.standard.string(forKey: "RTDetailSheet") {
-                case "comment": sheet = .comment
+                case "comment":
+                    try? await Task.sleep(for: .milliseconds(600))
+                    if let d = UserDefaults.standard.string(forKey: "RTDraft") { model.draft = d }
+                    sheet = .comment
                 case "edit": sheet = .edit
                 case "time": sheet = .time(nil)
                 case "relation": sheet = .relation
                 default: break
                 }
                 #endif
+                await model.load(app)
+                if let note { scroll(to: note, proxy) }
             }
             .onReceive(NotificationCenter.default.publisher(for: .scrollToNote)) { n in
                 guard n.userInfo?["issue"] as? Int == issueId else { return }
@@ -91,6 +94,9 @@ struct IssueDetailView: View {
         .navigationTitle("#" + String(issueId))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
+        .toolbar { if let issue = model.issue { bottomActions(issue) } }
+        // на iPhone нижний тулбар действий заменяет таб-бар (как у экрана письма в Mail); на iPad таб-бар — это сайдбар, его не трогаем
+        .toolbar(hSize == .compact && model.issue != nil ? .hidden : .automatic, for: .tabBar)
         .environment(\.openURL, OpenURLAction { url in handle(url) })
         .sheet(item: $sheet) { s in sheetView(s) }
         .quickLookPreview($preview)
@@ -201,48 +207,58 @@ struct IssueDetailView: View {
                 .textSelection(.enabled)
             Text("Created by \(issue.author.name) · \(Fmt.dateTime(issue.createdOn))")
                 .font(.footnote).foregroundStyle(.secondary)
-            if model.busy || model.loading {
-                ProgressView().controlSize(.small)
+            HStack(spacing: 8) {
+                StatusPill(status: issue.status)
+                if model.busy || model.loading { ProgressView().controlSize(.small) }
             }
-            actionRow(issue)
+            if let e = model.refreshError {
+                Label {
+                    Text("Couldn’t refresh: \(e)")
+                } icon: { Image(systemName: "exclamationmark.triangle") }
+                .font(.footnote).foregroundStyle(.secondary)
+            }
             CaptchaButton { Task { await model.load(app) } }
         }
         .padding(.vertical, 4)
     }
 
-    /// Не больше трёх кнопок в ряд (HIG → Layout): комментарий, статус, остальное — в меню «…».
-    @ViewBuilder
-    private func actionRow(_ issue: Issue) -> some View {
+    /// Главные действия — в нижнем тулбаре (HIG → Toolbars: частые действия у большого пальца, как в Mail):
+    /// статус слева, списание времени и комментарий справа. Остальное — в меню «…» навбара.
+    @ToolbarContentBuilder
+    private func bottomActions(_ issue: Issue) -> some ToolbarContent {
         let me = app.settings.userId
-        // на крупном шрифте кнопки встают столбиком, а не сжимаются
-        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
-        layout {
-            if model.perms.has("add_issue_notes") {
-                Button {
-                    model.startComment()
-                    sheet = .comment
-                } label: {
-                    Label("Comment", systemImage: "text.bubble").lineLimit(1).minimumScaleFactor(0.75).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-            }
+        ToolbarItem(placement: .bottomBar) {
             if model.perms.editIssue(issue, me: me), let statuses = issue.allowedStatuses, !statuses.isEmpty {
                 Menu {
                     Picker("Status", selection: Binding(get: { issue.status.id }, set: { id in Task { await model.setStatus(id, app) } })) {
                         ForEach(statuses) { Text($0.name).tag($0.id) }
                     }
                 } label: {
-                    Label(issue.status.name, systemImage: "arrow.triangle.2.circlepath").frame(maxWidth: .infinity).lineLimit(1)
+                    // сам статус виден капсулой в шапке, здесь — только смена
+                    Image(systemName: "arrow.triangle.2.circlepath")
                 }
-                .buttonStyle(.bordered)
-            } else {
-                Text(issue.status.name).font(.headline).foregroundStyle(statusTint(issue.status))
-                    .frame(maxWidth: .infinity)
+                .accessibilityLabel(Text("Change status"))
+                .accessibilityValue(Text(issue.status.name))
+                .disabled(model.busy)
             }
         }
-        .controlSize(.large)
-        .disabled(model.busy)
-        .buttonStyle(.borderless)
+        if #available(iOS 26, *) { ToolbarSpacer(.flexible, placement: .bottomBar) } else { ToolbarItem(placement: .bottomBar) { Spacer() } }
+        ToolbarItem(placement: .bottomBar) {
+            if model.perms.has("log_time") {
+                Button { sheet = .time(nil) } label: { Image(systemName: "clock") }
+                    .accessibilityLabel(Text("Log time"))
+            }
+        }
+        ToolbarItem(placement: .bottomBar) {
+            if model.perms.has("add_issue_notes") {
+                Button {
+                    model.startComment()
+                    sheet = .comment
+                } label: { Image(systemName: "square.and.pencil") }
+                .accessibilityLabel(Text("Comment"))
+                .modifier(ProminentToolbarButton())
+            }
+        }
     }
 
     @ViewBuilder
@@ -284,8 +300,9 @@ struct IssueDetailView: View {
             }
         }
         if canEdit {
-            Picker(selection: Binding(get: { issue.doneRatio / 10 * 10 }, set: { v in Task { await model.setDoneRatio(v, app) } })) {
-                ForEach(Array(stride(from: 0, through: 100, by: 10)), id: \.self) { Text("\($0)%").tag($0) }
+            Picker(selection: Binding(get: { issue.doneRatio }, set: { v in Task { await model.setDoneRatio(v, app) } })) {
+                // текущее значение — своим тегом: 59% не должно показываться как 50%
+                ForEach(Array(Set(stride(from: 0, through: 100, by: 10)).union([issue.doneRatio])).sorted(), id: \.self) { Text("\($0)%").tag($0) }
             } label: {
                 progressLabel(issue)
             }
@@ -847,5 +864,25 @@ struct AttachmentRow: View {
         if t?.conforms(to: .presentation) == true { return "rectangle.on.rectangle" }
         if t?.conforms(to: .text) == true { return "doc.text" }
         return "doc"
+    }
+}
+
+/// Статус задачи капсулой: цвет — не единственный признак, название всегда написано.
+struct StatusPill: View {
+    let status: IssueStatus
+    var body: some View {
+        Text(status.name)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(statusTint(status))
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(statusTint(status).opacity(0.14), in: Capsule())
+            .accessibilityLabel(Text("Status: \(status.name)"))
+    }
+}
+
+/// Главное действие тулбара — выделенным стеклом на iOS 26+, как «Отправить» в системных приложениях.
+struct ProminentToolbarButton: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) { content.buttonStyle(.glassProminent) } else { content.buttonStyle(.borderedProminent) }
     }
 }
