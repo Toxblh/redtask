@@ -650,9 +650,16 @@ struct ConfirmDelete {
     var action: () async -> Void
 }
 
+/// Обёртка: замыкание в окружении сравнивается по ссылке и дёргало бы зависимые виды на каждом обновлении.
+struct NavigateAction: Equatable {
+    var perform: @MainActor (IssueLink) -> Void = { _ in }
+    @MainActor func callAsFunction(_ l: IssueLink) { perform(l) }
+    static func == (a: Self, b: Self) -> Bool { true }
+}
+
 extension EnvironmentValues {
     /// Переход к другой задаче из детали — в стек колонки детали.
-    @Entry var navigate: @MainActor (IssueLink) -> Void = { _ in }
+    @Entry var navigate = NavigateAction()
 }
 
 // MARK: - Строки

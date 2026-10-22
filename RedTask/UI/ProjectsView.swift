@@ -3,12 +3,11 @@ import SwiftUI
 /// Проекты (кэш на неделю) → задачи проекта. Внутренний стек живёт в колонке списка.
 struct ProjectsView: View {
     @Environment(AppModel.self) private var app
-    @Binding var selection: Int?
+    @Binding var selection: Project?
     @State private var projects: [Project] = []
     @State private var error: String?
     @State private var loading = false
     @State private var query = ""
-    @State private var path: [Project] = []
 
     private var shown: [Project] {
         let q = query.trimmingCharacters(in: .whitespaces)
@@ -17,8 +16,8 @@ struct ProjectsView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            List(shown) { p in
+        Group {
+            List(shown, selection: $selection) { p in
                 NavigationLink(value: p) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(p.name).font(.body)
@@ -48,9 +47,6 @@ struct ProjectsView: View {
                 } else if shown.isEmpty {
                     ContentUnavailableView.search(text: query)
                 }
-            }
-            .navigationDestination(for: Project.self) { p in
-                IssueListView(kind: .project(p.id, p.name), selection: $selection)
             }
             .task { if projects.isEmpty { await load(force: false) } }
         }

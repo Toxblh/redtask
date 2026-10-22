@@ -42,6 +42,7 @@ final class IssueListModel {
     private(set) var missingFavorites: [Int] = []
     private var generation = 0
     private var loadedEpoch = -1
+    private var shownKey = ""
 
     init(kind: ListKind) { self.kind = kind }
 
@@ -72,7 +73,8 @@ final class IssueListModel {
         loadedEpoch = app.listEpoch
         let searching = !query.trimmingCharacters(in: .whitespaces).isEmpty
         if !searching, let cached = await ListCache.load(app.account, cacheKey), gen == generation {
-            if issues.isEmpty || issues.first?.status.isClosed != cached.first?.status.isClosed { issues = cached }
+            // смена фильтра — сразу сохранённая выдача нового фильтра; обновление того же — не трогаем показанное
+            if issues.isEmpty || shownKey != cacheKey { issues = cached }
         }
         loading = true
         defer { if gen == generation { loading = false } }
@@ -93,6 +95,7 @@ final class IssueListModel {
             }
             guard gen == generation else { return }
             issues = fresh
+            shownKey = cacheKey
             error = nil
             stale = false
             if !searching { await ListCache.save(app.account, cacheKey, fresh) }
@@ -148,7 +151,7 @@ struct IssueListView: View {
         List(selection: $selection) {
             Section {
                 ForEach(model.issues) { issue in
-                    IssueRow(issue: issue, showProject: !isProject)
+                    IssueRow(issue: issue, showProject: !isProject, showAssignee: model.kind != .mine)
                         .tag(issue.id)
                         .swipeActions(edge: .leading) {
                             Button {
@@ -243,6 +246,7 @@ struct IssueRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let issue: Issue
     var showProject = true
+    var showAssignee = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -275,7 +279,7 @@ struct IssueRow: View {
                     .foregroundStyle(statusTint(issue.status))
                     .fontWeight(.medium)
                 if showProject { Text(issue.project.name).lineLimit(1) }
-                if let a = issue.assignedTo { Text(a.name).lineLimit(1) }
+                if showAssignee, let a = issue.assignedTo { Text(a.name).lineLimit(1) }
                 if let due = issue.dueDate, !issue.status.isClosed {
                     let overdue = Fmt.isOverdue(due)
                     Label(Fmt.date(due), systemImage: overdue ? "exclamationmark.circle" : "calendar")

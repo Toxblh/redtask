@@ -208,6 +208,7 @@ RU = {
 "Search": "Поиск",
 "Search in this list": "Поиск в этом списке",
 "Search issues": "Поиск задач",
+"Select a project": "Выберите проект",
 "Select an issue": "Выберите задачу",
 "Send": "Отправить",
 "Server": "Сервер",

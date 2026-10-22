@@ -28,7 +28,7 @@ struct RootView: View {
                 TabSection(tab: .favorites, sheet: $sheet) { sel in IssueListView(kind: .favorites, selection: sel) }
             }
             Tab("Projects", systemImage: "folder", value: AppTab.projects) {
-                TabSection(tab: .projects, sheet: $sheet) { sel in ProjectsView(selection: sel) }
+                TabSection(tab: .projects, sheet: $sheet, projects: true) { sel in EmptyView() }
             }
             Tab(value: AppTab.search, role: .search) {
                 TabSection(tab: .search, sheet: $sheet) { sel in SearchView(selection: sel) }
@@ -61,30 +61,38 @@ struct RootView: View {
         @Environment(AppModel.self) private var app
         let tab: AppTab
         @Binding var sheet: RootSheet?
+        /// Проекты — три колонки: проекты → задачи проекта → задача (на iPhone — один стек).
+        var projects = false
         @ViewBuilder let content: (Binding<Int?>) -> Content
+        @State private var project: Project?
+        /// На iPhone переход из уведомления/ссылки показывает сразу задачу, минуя список.
+        @State private var compactColumn = NavigationSplitViewColumn.sidebar
         @State private var selection: Int?
         @State private var note: Int?
         @State private var path: [IssueLink] = []
         @SceneStorage("tab") private var current: AppTab = .mine
 
         var body: some View {
-            NavigationSplitView {
-                content($selection)
-                    .toolbar { RootToolbar(sheet: $sheet) }
-                    // у таб-бара iPad уже есть своя кнопка сайдбара — вторая рядом только путает
-                    .toolbar(removing: .sidebarToggle)
-            } detail: {
-                NavigationStack(path: $path) {
-                    if let id = selection {
-                        IssueDetailView(issueId: id, note: note, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
-                            .id(id)
-                            .navigationDestination(for: IssueLink.self) { l in
-                                IssueDetailView(issueId: l.id, note: l.note, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
-                            }
-                            .environment(\.navigate) { path.append($0) }
-                    } else {
-                        ContentUnavailableView("Select an issue", systemImage: "checklist")
-                    }
+            Group {
+                if projects {
+                    NavigationSplitView(preferredCompactColumn: $compactColumn) {
+                        ProjectsView(selection: $project)
+                            .toolbar { RootToolbar(sheet: $sheet) }
+                            .toolbar(removing: .sidebarToggle)
+                    } content: {
+                        if let p = project {
+                            IssueListView(kind: .project(p.id, p.name), selection: $selection).id(p.id)
+                        } else {
+                            ContentUnavailableView("Select a project", systemImage: "folder")
+                        }
+                    } detail: { detail }
+                } else {
+                    NavigationSplitView(preferredCompactColumn: $compactColumn) {
+                        content($selection)
+                            .toolbar { RootToolbar(sheet: $sheet) }
+                            // у таб-бара iPad уже есть своя кнопка сайдбара — вторая рядом только путает
+                            .toolbar(removing: .sidebarToggle)
+                    } detail: { detail }
                 }
             }
             .onChange(of: selection) { _, new in
@@ -97,6 +105,21 @@ struct RootView: View {
 
         @State private var pendingNoteIssue: Int?
 
+        private var detail: some View {
+            NavigationStack(path: $path) {
+                if let id = selection {
+                    IssueDetailView(issueId: id, note: note, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
+                        .id(id)
+                        .navigationDestination(for: IssueLink.self) { l in
+                            IssueDetailView(issueId: l.id, note: l.note, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
+                        }
+                        .environment(\.navigate, NavigateAction { path.append($0) })
+                } else {
+                    ContentUnavailableView("Select an issue", systemImage: "checklist")
+                }
+            }
+        }
+
         private func handle(_ r: OpenRequest?) {
             guard let r, current == tab else { return }
             app.openRequest = nil
@@ -108,6 +131,7 @@ struct RootView: View {
             } else {
                 selection = r.issueId
             }
+            compactColumn = .detail
         }
     }
 }

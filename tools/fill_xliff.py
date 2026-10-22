@@ -9,7 +9,7 @@ def unit(m):
     block = m.group(0)
     key = html.unescape(m.group(1))
     if key not in RU:
-        if re.search(r'[A-Za-z]{3}', key) and key not in ('CFBundleDisplayName', 'CFBundleName'): missing.append(key)
+        if re.search(r'[A-Za-z]{3}', key) and '|==|' not in key and key not in ('CFBundleDisplayName', 'CFBundleName'): missing.append(key)
         return block
     tgt = '<target state="translated">' + html.escape(RU[key], quote=False) + '</target>'
     block = re.sub(r'<target[^>]*>.*?</target>\s*', '', block, flags=re.S)
