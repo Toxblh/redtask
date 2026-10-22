@@ -1482,6 +1482,16 @@
         }
       }
     },
+    "LinkedIn" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LinkedIn"
+          }
+        }
+      }
+    },
     "Log time" : {
       "localizations" : {
         "ru" : {
@@ -1498,6 +1508,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Логин"
+          }
+        }
+      }
+    },
+    "Manager" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Руководитель"
           }
         }
       }

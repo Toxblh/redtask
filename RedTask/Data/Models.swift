@@ -326,6 +326,8 @@ struct Person: Codable, Sendable, Hashable, Identifiable {
     var department: Named?
     var personnelNumber: String?
     var managerId: Int?
+    var linkedin: String?
+    var background: String?
 
     init(id: Int, login: String? = nil, firstname: String = "", lastname: String = "") {
         self.id = id; self.login = login; self.firstname = firstname; self.lastname = lastname

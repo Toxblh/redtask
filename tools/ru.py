@@ -102,6 +102,8 @@ RU = {
 "Estimate": "Оценка",
 "Estimate, h": "Оценка, ч",
 "Favorite": "В избранное",
+"Manager": "Руководитель",
+"LinkedIn": "LinkedIn",
 "Favorites": "Избранное",
 "Favorites only": "Только избранные",
 "Feed": "Лента",

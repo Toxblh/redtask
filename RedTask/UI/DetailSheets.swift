@@ -291,52 +291,81 @@ struct RelationSheet: View {
     }
 }
 
-/// Карточка человека: People (должность, отдел) или /users.
+/// Карточка человека: People (должность, отдел, руководитель) или /users. Руководитель открывается тут же, со «Назад».
 struct PersonCard: View {
-    @Environment(AppModel.self) private var app
-    @Environment(\.dismiss) private var dismiss
     let userId: Int
-    @State private var person: Person?
-    @State private var error: String?
 
     var body: some View {
         NavigationStack {
-            List {
-                if let p = person {
-                    Section {
-                        HStack(spacing: 16) {
-                            Avatar(name: p.displayName, userId: p.id, size: 64)
-                            VStack(alignment: .leading) {
-                                Text(p.displayName).font(.title3.bold())
-                                if let j = p.jobTitle, !j.isEmpty { Text(j).foregroundStyle(.secondary) }
+            PersonPage(userId: userId, root: true)
+                .navigationDestination(for: Int.self) { PersonPage(userId: $0) }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+private struct PersonPage: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    let userId: Int
+    /// «Готово» — только у первой карточки: у открытых из неё есть «Назад».
+    var root = false
+    @State private var person: Person?
+    @State private var manager: Person?
+    @State private var error: String?
+
+    var body: some View {
+        List {
+            if let p = person {
+                Section {
+                    HStack(spacing: 16) {
+                        Avatar(name: p.displayName, userId: p.id, size: 64)
+                        VStack(alignment: .leading) {
+                            Text(p.displayName).font(.title3.bold())
+                            if let j = p.jobTitle, !j.isEmpty { Text(j).foregroundStyle(.secondary) }
+                        }
+                    }
+                }
+                Section {
+                    if let d = p.department?.name { LabeledContent("Department", value: d) }
+                    if let m = manager {
+                        NavigationLink(value: m.id) {
+                            LabeledContent("Manager") {
+                                HStack(spacing: 8) {
+                                    Text(m.displayName)
+                                    Avatar(name: m.displayName, userId: m.id, size: 24)
+                                }
                             }
                         }
                     }
-                    Section {
-                        if let l = p.login { LabeledContent("Login", value: l).textSelection(.enabled) }
-                        if let m = p.mailAddr, let u = URL(string: "mailto:\(m)") { LabeledContent("Email") { Link(m, destination: u) } }
-                        if let d = p.department?.name { LabeledContent("Department", value: d) }
-                        if let n = p.personnelNumber { LabeledContent("Personnel No.", value: n) }
-                    }
-                } else if let error {
-                    Text(error).foregroundStyle(.secondary)
-                } else {
-                    ProgressView()
-                }
-                if let api = app.api {
-                    Link(destination: api.baseURL.appendingPathComponent("people/\(userId)")) {
-                        Label("Open profile in Redmine", systemImage: "safari")
+                    if let m = p.mailAddr, let u = URL(string: "mailto:\(m)") { LabeledContent("Email") { Link(m, destination: u) } }
+                    if let l = p.login { LabeledContent("Login", value: l).textSelection(.enabled) }
+                    if let n = p.personnelNumber, !n.isEmpty { LabeledContent("Personnel No.", value: n) }
+                    if let li = p.linkedin, !li.isEmpty, let u = URL(string: li) {
+                        LabeledContent("LinkedIn") { Link(li.replacingOccurrences(of: "https://www.linkedin.com/in/", with: "").trimmingCharacters(in: ["/"]), destination: u) }
                     }
                 }
+                if let bg = p.background, !bg.isEmpty {
+                    Section { Text(bg).font(.callout).foregroundStyle(.secondary) }
+                }
+            } else if let error {
+                Text(error).foregroundStyle(.secondary)
+            } else {
+                ProgressView()
             }
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { SheetConfirmButton("Done") { dismiss() } } }
-            .task {
-                guard let refs = app.refs else { return }
-                do { person = try await refs.person(userId) } catch { self.error = error.localizedDescription }
+            if let api = app.api {
+                Link(destination: api.baseURL.appendingPathComponent("people/\(userId)")) {
+                    Label("Open profile in Redmine", systemImage: "safari")
+                }
             }
         }
-        .presentationDetents([.medium, .large])
+        .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar { if root { ToolbarItem(placement: .confirmationAction) { SheetConfirmButton("Done") { dismiss() } } } }
+        .task {
+            guard let refs = app.refs else { return }
+            do { person = try await refs.person(userId) } catch { self.error = error.localizedDescription }
+            if let mid = person?.managerId, mid != userId { manager = try? await refs.person(mid) }
+        }
     }
 }
