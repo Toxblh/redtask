@@ -548,3 +548,29 @@ struct ProjectPicker: View {
         .task { projects = (try? await app.refs?.projects()) ?? [] }
     }
 }
+
+/**
+ Поля трекера, по убыванию точности: веб-форма новой задачи под сессией WKWebView (ровно то, что видит
+ пользователь, с обязательностью и вариантами); /custom_fields.json (админ) ∩ поля проекта; только имена.
+ */
+func fetchFormFields(api: RedmineAPI, projectId: Int, trackerId: Int) async -> [FormField] {
+    if let host = api.baseURL.host, let cookie = await AppModel.cookieHeader(host: host) {
+        let ua = WafGate.shared.browser?.agent ?? UserDefaults.standard.string(forKey: "wafAgent") ?? "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+        if let html = try? await api.webPage("projects/\(projectId)/issues/new", cookie: cookie, userAgent: ua, [("issue[tracker_id]", String(trackerId))]),
+           html.contains("issue-form") {
+            return parseIssueFormFields(html)
+        }
+    }
+    let inProject = (try? await api.projectIssueCustomFields(projectId)) ?? []
+    let defs = (try? await api.customFieldDefs()) ?? []
+    if defs.isEmpty { return inProject.map { FormField(id: $0.id, name: $0.name) } }
+    let ids = Set(inProject.map(\.id))
+    return defs
+        .filter { d in (ids.isEmpty || ids.contains(d.id)) && (d.trackers.isEmpty || d.trackers.contains { $0.id == trackerId }) }
+        .map { d in
+            FormField(id: d.id, name: d.name, format: d.fieldFormat.isEmpty ? "string" : d.fieldFormat, required: d.isRequired, multiple: d.multiple,
+                      options: d.possibleValues.map { .init(value: $0.value, label: $0.label.isEmpty ? $0.value : $0.label) },
+                      defaults: d.defaultValue.map { $0.isEmpty ? [] : [$0] } ?? [])
+        }
+}
+

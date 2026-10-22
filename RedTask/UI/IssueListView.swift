@@ -246,16 +246,20 @@ struct IssueRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(verbatim: "#\(issue.id)").monospacedDigit()
-                Text(issue.tracker.name)
-                if app.isFavorite(issue.id) {
-                    Image(systemName: "star.fill").foregroundStyle(.yellow).accessibilityLabel("Favorite")
+            let ax = typeSize.isAccessibilitySize
+            let head = ax ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))
+            head {
+                HStack(spacing: 6) {
+                    Text(verbatim: "#\(issue.id)").monospacedDigit().fixedSize()
+                    Text(issue.tracker.name)
+                    if app.isFavorite(issue.id) {
+                        Image(systemName: "star.fill").foregroundStyle(.yellow).accessibilityLabel("Favorite")
+                    }
+                    if issue.isPrivate {
+                        Image(systemName: "lock.fill").accessibilityLabel("Private")
+                    }
                 }
-                if issue.isPrivate {
-                    Image(systemName: "lock.fill").accessibilityLabel("Private")
-                }
-                Spacer()
+                if !ax { Spacer() }
                 Text(Fmt.relative(issue.updatedOn))
             }
             .font(.caption)

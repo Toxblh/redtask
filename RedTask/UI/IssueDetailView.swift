@@ -33,6 +33,7 @@ enum DetailSheet: Identifiable {
 struct IssueDetailView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var typeSize
     let issueId: Int
     var note: Int?
     var newSubtask: (Issue) -> Void = { _ in }
@@ -210,13 +211,15 @@ struct IssueDetailView: View {
     @ViewBuilder
     private func actionRow(_ issue: Issue) -> some View {
         let me = app.settings.userId
-        HStack(spacing: 10) {
+        // на крупном шрифте кнопки встают столбиком, а не сжимаются
+        let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+        layout {
             if model.perms.has("add_issue_notes") {
                 Button {
                     model.startComment()
                     sheet = .comment
                 } label: {
-                    Label("Comment", systemImage: "text.bubble").frame(maxWidth: .infinity)
+                    Label("Comment", systemImage: "text.bubble").lineLimit(1).minimumScaleFactor(0.75).frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
             }

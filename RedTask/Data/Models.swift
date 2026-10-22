@@ -15,7 +15,8 @@ extension Dictionary: Defaultable { static var defaultValue: Self { [:] } }
 @propertyWrapper
 struct D<T: Codable & Sendable & Hashable & Defaultable>: Codable, Sendable, Hashable {
     var wrappedValue: T
-    init(wrappedValue: T = T.defaultValue) { self.wrappedValue = wrappedValue }
+    init(wrappedValue: T) { self.wrappedValue = wrappedValue }
+    init() { wrappedValue = T.defaultValue }
     init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
         wrappedValue = (try? c.decode(T.self)) ?? T.defaultValue

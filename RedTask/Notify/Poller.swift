@@ -95,7 +95,7 @@ struct PollCollector {
             if mentionsOnly && !textMentions(j.notes, login: s.userLogin) { continue }
             let text = await journalText(issue, j)
             if text.isEmpty { continue }
-            let cats = Self.types(j, userId: s.userId, login: s.userLogin)
+            let cats = journalTypes(j, userId: s.userId, login: s.userLogin)
             var e = entry(issue, at: at, who: j.user, text: text, type: cats[0], eventId: "j\(j.id)", strong: await strong(j, cats[0]))
             for c in cats.dropFirst() { e.alsoTypes[c] = await strong(j, c) }
             out.append(e)
@@ -151,42 +151,6 @@ struct PollCollector {
             return new > old
         default: return true
         }
-    }
-
-    /**
-     Категории журнала — все: комментарий вместе со сменой статуса относится к обеим. Первая — главная
-     (тип записи истории); упоминание меня — всегда первое.
-     */
-    static func types(_ j: Journal, userId: Int, login: String = "") -> [String] {
-        let me = String(userId)
-        func attr(_ name: String) -> JournalDetail? { j.details.first { $0.property == "attr" && $0.name == name } }
-        let assignee = attr("assigned_to_id")
-        let toMe = assignee?.newValue == me
-        let fromMe = !toMe && assignee?.oldValue == me
-        let other = j.details.contains { d in
-            switch d.property {
-            case "attachment": return false
-            case "attr":
-                switch d.name {
-                case "status_id", "priority_id", "due_date": return false
-                case "assigned_to_id": return !toMe && !fromMe
-                default: return true
-                }
-            default: return true
-            }
-        }
-        let hasNotes = !(j.notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        var out: [String] = []
-        if textMentions(j.notes, login: login) { out.append(NotifType.mention) }
-        if toMe { out.append(NotifType.assigned) }
-        if fromMe { out.append(NotifType.reassignedAway) }
-        if attr("status_id") != nil { out.append(NotifType.status) }
-        if hasNotes { out.append(j.privateNotes ? NotifType.privateNote : NotifType.comment) }
-        if attr("priority_id") != nil { out.append(NotifType.priority) }
-        if attr("due_date") != nil { out.append(NotifType.due) }
-        if j.details.contains(where: { $0.property == "attachment" }) { out.append(NotifType.attachment) }
-        if other { out.append(NotifType.other) }
-        return out.isEmpty ? [NotifType.other] : out
     }
 
     private func journalText(_ issue: Issue, _ j: Journal) async -> String {
