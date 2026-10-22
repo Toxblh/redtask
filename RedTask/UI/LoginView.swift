@@ -67,6 +67,9 @@ struct LoginView: View {
                     if manual { Text("My account → API access key → Show") }
                 }
             }
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity)
+            .background(Color(.systemGroupedBackground))
             .alert("Sign-in failed", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("OK", role: .cancel) {}
             } message: {

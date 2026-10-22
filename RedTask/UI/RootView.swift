@@ -71,6 +71,8 @@ struct RootView: View {
             NavigationSplitView {
                 content($selection)
                     .toolbar { RootToolbar(sheet: $sheet) }
+                    // у таб-бара iPad уже есть своя кнопка сайдбара — вторая рядом только путает
+                    .toolbar(removing: .sidebarToggle)
             } detail: {
                 NavigationStack(path: $path) {
                     if let id = selection {
