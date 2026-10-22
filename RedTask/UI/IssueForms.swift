@@ -341,6 +341,8 @@ struct NewIssueView: View {
     @State private var tried = false
     @State private var error: String?
     @State private var confirmDiscard = false
+    /// Проект последней созданной задачи — по умолчанию для следующей.
+    @AppStorage("lastProjectId") private var lastProjectId = 0
 
     private var missing: [FormField] { fields.filter { f in f.required && (values[f.id] ?? []).allSatisfy { $0.trimmingCharacters(in: .whitespaces).isEmpty } } }
     private var dirty: Bool { !subject.isEmpty || !description.isEmpty || !files.isEmpty }
@@ -443,7 +445,7 @@ struct NewIssueView: View {
             priorities = list
             if priorityId == nil { priorityId = list.first(where: \.isDefault)?.id }
         }
-        if let projectId, project == nil {
+        if let projectId = projectId ?? (lastProjectId > 0 ? lastProjectId : nil), project == nil {
             let known = (try? await refs.projects())?.first { $0.id == projectId }
             select(known ?? Project(id: projectId, name: "#\(projectId)"))
         }
@@ -510,6 +512,7 @@ struct NewIssueView: View {
             if !uploads.isEmpty { form["uploads"] = RedmineAPI.uploadsJSON(uploads) }
             let created = try await api.createIssue(form)
             app.listEpoch += 1
+            lastProjectId = p.id
             dismiss()
             app.open(created.id)
         } catch { self.error = error.localizedDescription }

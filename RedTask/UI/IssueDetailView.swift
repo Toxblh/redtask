@@ -68,6 +68,15 @@ struct IssueDetailView: View {
             .task {
                 await model.load(app)
                 if let note { scroll(to: note, proxy) }
+                #if DEBUG
+                switch UserDefaults.standard.string(forKey: "RTDetailSheet") {
+                case "comment": sheet = .comment
+                case "edit": sheet = .edit
+                case "time": sheet = .time(nil)
+                case "relation": sheet = .relation
+                default: break
+                }
+                #endif
             }
             .onReceive(NotificationCenter.default.publisher(for: .scrollToNote)) { n in
                 guard n.userInfo?["issue"] as? Int == issueId else { return }
