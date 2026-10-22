@@ -195,8 +195,15 @@ extension View {
     }
 }
 
-/// Цвет статуса: закрытые приглушены, остальное — акцент.
-func statusTint(_ s: IssueStatus) -> Color { s.isClosed ? .secondary : .accentColor }
+/// Цвет статуса — системные цвета (сами подстраиваются под тёмную тему и повышенный контраст).
+func statusTint(_ s: IssueStatus) -> Color {
+    switch s.kind {
+    case .todo: .gray
+    case .inProgress: .blue
+    case .done: .green
+    case .rejected: .red
+    }
+}
 
 /// Копирование в буфер с тактильным откликом.
 @MainActor func copyToPasteboard(_ s: String) {
@@ -251,6 +258,118 @@ struct SheetConfirmButton: View {
                 .buttonStyle(.glassProminent)
         } else {
             Button(title, action: action).fontWeight(.semibold)
+        }
+    }
+}
+
+/// Действие свайпом от края строки.
+struct EdgeAction {
+    let title: LocalizedStringKey
+    let systemImage: String
+    let tint: Color
+    let action: () -> Void
+}
+
+extension View {
+    /// Свайп от края строки — действие (как «Ответить» в Telegram); свайп из середины уходит пейджеру фильтров.
+    func edgeSwipe(leading: EdgeAction?, trailing: EdgeAction?) -> some View {
+        modifier(EdgeSwipe(leading: leading, trailing: trailing))
+    }
+}
+
+private struct EdgeSwipe: ViewModifier {
+    let leading: EdgeAction?
+    let trailing: EdgeAction?
+    @State private var offset: CGFloat = 0
+    @State private var frame: CGRect = .zero
+    private let threshold: CGFloat = 72
+
+    private var current: EdgeAction? { offset > 0 ? leading : offset < 0 ? trailing : nil }
+
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(offset == 0 ? Color.clear : Color(.systemBackground))
+            .offset(x: offset)
+            .background {
+                if let a = current {
+                    let armed = abs(offset) >= threshold
+                    Image(systemName: a.systemImage)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .scaleEffect(armed ? 1.15 : 0.85)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: offset > 0 ? .leading : .trailing)
+                        .padding(.horizontal, 20)
+                        .background(armed ? a.tint : a.tint.opacity(0.5))
+                        .padding(.horizontal, -20).padding(.vertical, -8) // во всю строку, за отступы списка
+                        .animation(.snappy, value: armed)
+                }
+            }
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+            .gesture(EdgePan(frame: frame, leading: leading != nil, trailing: trailing != nil) { dx in
+                let was = abs(offset) >= threshold
+                offset = dx > 0 ? (leading == nil ? 0 : rubber(dx)) : (trailing == nil ? 0 : -rubber(-dx))
+                if was != (abs(offset) >= threshold) { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+            } ended: {
+                if abs(offset) >= threshold { current?.action() }
+                withAnimation(.snappy) { offset = 0 }
+            })
+            .accessibilityActions {
+                if let leading { Button(leading.title, action: leading.action) }
+                if let trailing { Button(trailing.title, action: trailing.action) }
+            }
+    }
+
+    private func rubber(_ x: CGFloat) -> CGFloat { x < threshold ? x : threshold + (x - threshold) * 0.35 }
+}
+
+/// Горизонтальный пан, начатый у края строки: пейджер и список ждут его отказа, иначе жест их.
+private struct EdgePan: UIGestureRecognizerRepresentable {
+    let frame: CGRect
+    let leading: Bool
+    let trailing: Bool
+    let changed: (CGFloat) -> Void
+    let ended: () -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let g = UIPanGestureRecognizer()
+        g.delegate = context.coordinator
+        return g
+    }
+
+    func updateUIGestureRecognizer(_ g: UIPanGestureRecognizer, context: Context) {
+        context.coordinator.frame = frame
+        context.coordinator.leading = leading
+        context.coordinator.trailing = trailing
+    }
+
+    func handleUIGestureRecognizerAction(_ g: UIPanGestureRecognizer, context: Context) {
+        switch g.state {
+        case .changed: changed(g.translation(in: nil).x)
+        case .ended, .cancelled, .failed: ended()
+        default: break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var frame: CGRect = .zero
+        var leading = false
+        var trailing = false
+        /// Ширина зоны у края строки, откуда свайп — действие.
+        let edge: CGFloat = 36
+
+        func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+            guard let p = g as? UIPanGestureRecognizer else { return false }
+            let v = p.velocity(in: nil), t = p.translation(in: nil)
+            guard abs(v.x) > abs(v.y) else { return false }
+            let x = p.location(in: nil).x - t.x
+            return (leading && v.x > 0 && x < frame.minX + edge) || (trailing && v.x < 0 && x > frame.maxX - edge)
+        }
+
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            other.view is UIScrollView
         }
     }
 }

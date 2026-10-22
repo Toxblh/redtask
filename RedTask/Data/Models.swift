@@ -90,6 +90,29 @@ struct IssueStatus: Codable, Sendable, Hashable, Identifiable {
     @D var isClosed: Bool
 }
 
+/// Вид статуса для цвета — как на Android (три слоя, от точного к общему).
+enum StatusKind: Sendable { case todo, inProgress, done, rejected }
+
+extension IssueStatus {
+    /// Точечные исключения по полному имени — побеждают эвристику.
+    private static let overrides: [String: StatusKind] = [
+        "Заявка обработана": .inProgress, "Заявка согласована": .inProgress,
+        "Отчислен с курса": .rejected, "Заблокирован": .rejected, "Прекращено": .rejected,
+    ]
+    private static let rejectedRe = "отклон|отказ|reject|cancel|аннул|закрыт без|не принят|недейств|упущено|неуспешно"
+    private static let todoRe = "^(нов|созд|черновик|драфт|бэклог|backlog|to.?do|open|new|лид|1% лид|заявка|ожидание приёма)"
+
+    var kind: StatusKind {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        if let k = Self.overrides[n] { return k }
+        func has(_ re: String) -> Bool { n.range(of: re, options: [.regularExpression, .caseInsensitive]) != nil }
+        if has(Self.rejectedRe) { return .rejected }
+        if isClosed { return .done }
+        if has(Self.todoRe) { return .todo }
+        return .inProgress
+    }
+}
+
 struct Priority: Codable, Sendable, Hashable, Identifiable {
     var id: Int
     @D var name: String

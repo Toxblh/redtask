@@ -180,3 +180,19 @@ struct FormTests {
         #expect(cf?.count == 1 && cf?[0]["id"] as? Int == 2 && (cf?[0]["value"] as? [String]) == ["x"])
     }
 }
+
+@Suite("Статусы")
+struct StatusKindTests {
+    func st(_ name: String, closed: Bool = false) -> IssueStatus { decode(#"{"id":1,"name":"\#(name)","is_closed":\#(closed)}"#) }
+
+    @Test func layers() {
+        #expect(st("Новая").kind == .todo)
+        #expect(st("Заявка").kind == .todo)
+        #expect(st("Заявка обработана").kind == .inProgress) // исключение побеждает todo
+        #expect(st("В работе").kind == .inProgress)
+        #expect(st("Закрыта", closed: true).kind == .done)
+        #expect(st("Отклонена", closed: true).kind == .rejected)
+        #expect(st("Rejected").kind == .rejected)
+        #expect(st("Заблокирован").kind == .rejected)
+    }
+}

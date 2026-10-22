@@ -30,7 +30,7 @@ enum ListKind: Hashable {
 @MainActor @Observable
 final class IssueListModel {
     let kind: ListKind
-    var filter: StatusFilter = .open
+    let filter: StatusFilter
     var query = ""
     private(set) var issues: [Issue] = []
     private(set) var total = 0
@@ -44,7 +44,7 @@ final class IssueListModel {
     private var loadedEpoch = -1
     private var shownKey = ""
 
-    init(kind: ListKind) { self.kind = kind }
+    init(kind: ListKind, filter: StatusFilter) { self.kind = kind; self.filter = filter }
 
     private var cacheKey: String { "\(kind.key)-\(filter.rawValue == "*" ? "all" : filter.rawValue)" }
     var canLoadMore: Bool { kind != .favorites && issues.count < total && !loadingMore }
@@ -60,6 +60,13 @@ final class IssueListModel {
         let s = query.trimmingCharacters(in: .whitespaces)
         if !s.isEmpty { q.subject = s }
         return q
+    }
+
+    /// Сохранённая выдача без сети — для соседних страниц, пока их не открыли.
+    func showCached(_ app: AppModel) async {
+        guard issues.isEmpty, query.isEmpty, let cached = await ListCache.load(app.account, cacheKey), issues.isEmpty else { return }
+        issues = cached
+        shownKey = cacheKey
     }
 
     func reloadIfStale(_ app: AppModel) async {
@@ -126,19 +133,23 @@ final class IssueListModel {
     }
 }
 
+/// Список с фильтрами Открытые/Закрытые/Все: страницы листаются свайпом за пальцем (как папки в Telegram),
+/// свайп от края карточки — действие над ней.
 struct IssueListView: View {
-    @Environment(AppModel.self) private var app
-    @State private var model: IssueListModel
+    let kind: ListKind
     @Binding var selection: Int?
-    @State private var actionError: String?
+    @State private var models: [StatusFilter: IssueListModel]
+    @State private var page: StatusFilter? = .open
+    @State private var query = ""
 
     init(kind: ListKind, selection: Binding<Int?>) {
-        _model = State(initialValue: IssueListModel(kind: kind))
+        self.kind = kind
         _selection = selection
+        _models = State(initialValue: Dictionary(uniqueKeysWithValues: StatusFilter.allCases.map { ($0, IssueListModel(kind: kind, filter: $0)) }))
     }
 
     private var title: String {
-        switch model.kind {
+        switch kind {
         case .mine: String(localized: "My Issues")
         case .watched: String(localized: "Watching")
         case .favorites: String(localized: "Favorites")
@@ -147,42 +158,47 @@ struct IssueListView: View {
     }
 
     var body: some View {
-        @Bindable var model = model
-        List(selection: $selection) {
-            Section {
-                ForEach(model.issues) { issue in
-                    IssueRow(issue: issue, showProject: !isProject, showAssignee: model.kind != .mine)
-                        .tag(issue.id)
-                        .swipeActions(edge: .leading) {
-                            Button {
-                                app.toggleFavorite(issue.id)
-                            } label: {
-                                Label(app.isFavorite(issue.id) ? "Unfavorite" : "Favorite",
-                                      systemImage: app.isFavorite(issue.id) ? "star.slash" : "star")
-                            }
-                            .tint(.yellow)
-                        }
-                        .swipeActions(edge: .trailing) {
-                            if issue.assignedTo?.id != app.settings.userId && !issue.status.isClosed {
-                                Button { assign(issue) } label: { Label("Take", systemImage: "person.crop.circle.badge.checkmark") }
-                                    .tint(.accentColor)
-                            }
-                        }
-                        .contextMenu { IssueMenu(issue: issue, onAssign: { assign(issue) }) }
-                        .onAppear {
-                            if issue.id == model.issues.last?.id { Task { await model.loadMore(app) } }
-                        }
-                }
-                if model.loadingMore {
-                    ProgressView().frame(maxWidth: .infinity)
-                }
-            } header: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Picker("Status", selection: $model.filter) {
-                        ForEach(StatusFilter.allCases) { Text($0.title).tag($0) }
+        VStack(spacing: 0) {
+            Picker("Status", selection: Binding(get: { page ?? .open }, set: { f in withAnimation { page = f } })) {
+                ForEach(StatusFilter.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+            ScrollView(.horizontal) {
+                HStack(spacing: 0) {
+                    ForEach(StatusFilter.allCases) { f in
+                        IssueListPage(model: models[f]!, query: query, active: (page ?? .open) == f, selection: $selection)
+                            .containerRelativeFrame([.horizontal, .vertical])
+                            .id(f)
                     }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $page)
+            .scrollIndicators(.hidden)
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $query, prompt: Text("Search in this list"))
+    }
+}
+
+/// Одна страница-фильтр. Грузит из сети, только пока видна; соседние сразу показывают сохранённое.
+private struct IssueListPage: View {
+    @Environment(AppModel.self) private var app
+    let model: IssueListModel
+    let query: String
+    let active: Bool
+    @Binding var selection: Int?
+    @State private var actionError: String?
+
+    var body: some View {
+        List(selection: $selection) {
+            if model.stale || (model.kind == .favorites && !model.missingFavorites.isEmpty) {
+                Section {
                     if model.stale {
                         Button {
                             Task { await model.load(app) }
@@ -197,23 +213,33 @@ struct IssueListView: View {
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                .textCase(nil)
-                .padding(.bottom, 4)
+            }
+            Section {
+                ForEach(model.issues) { issue in
+                    IssueRow(issue: issue, showProject: !isProject, showAssignee: model.kind != .mine)
+                        .edgeSwipe(leading: favoriteAction(issue), trailing: takeAction(issue))
+                        .tag(issue.id)
+                        .contextMenu { IssueMenu(issue: issue, onAssign: { assign(issue) }) }
+                        .onAppear {
+                            if issue.id == model.issues.last?.id { Task { await model.loadMore(app) } }
+                        }
+                }
+                if model.loadingMore {
+                    ProgressView().frame(maxWidth: .infinity)
+                }
             }
         }
         .listStyle(.plain)
-        .navigationTitle(title)
-        .searchable(text: $model.query, prompt: Text("Search in this list"))
         .refreshable { await model.load(app) }
         .overlay {
             if model.issues.isEmpty {
                 if let e = model.error {
                     LoadErrorView(message: e) { Task { await model.load(app) } }
-                } else if model.loading {
+                } else if model.loading || !active {
                     ProgressView()
                 } else if model.kind == .favorites && app.settings.favorites.isEmpty {
                     ContentUnavailableView("No favorites yet", systemImage: "star",
-                                           description: Text("Tap the star on an issue or swipe right on it in a list."))
+                                           description: Text("Tap the star on an issue or swipe right from its edge in a list."))
                 } else if !model.query.isEmpty {
                     ContentUnavailableView.search(text: model.query)
                 } else {
@@ -221,17 +247,33 @@ struct IssueListView: View {
                 }
             }
         }
-        .task(id: "\(model.filter.rawValue)|\(model.query)") {
-            // поиск — после паузы в наборе; смена фильтра — сразу
-            if !model.query.isEmpty { try? await Task.sleep(for: .milliseconds(400)) }
+        .task { await model.showCached(app) }
+        .task(id: "\(active)|\(query)") {
+            guard active else { return }
+            // поиск — после паузы в наборе; переход на страницу — сразу
+            let typing = model.query != query && !query.isEmpty
+            model.query = query
+            if typing { try? await Task.sleep(for: .milliseconds(400)) }
             if !Task.isCancelled { await model.load(app) }
         }
-        .onChange(of: app.listEpoch) { Task { await model.reloadIfStale(app) } }
-        .onChange(of: app.settings.favorites) { if model.kind == .favorites { Task { await model.load(app) } } }
+        .onChange(of: app.listEpoch) { if active { Task { await model.reloadIfStale(app) } } }
+        .onChange(of: app.settings.favorites) { if active && model.kind == .favorites { Task { await model.load(app) } } }
         .errorAlert($actionError)
     }
 
     private var isProject: Bool { if case .project = model.kind { true } else { false } }
+
+    private func favoriteAction(_ issue: Issue) -> EdgeAction {
+        let fav = app.isFavorite(issue.id)
+        return EdgeAction(title: fav ? "Unfavorite" : "Favorite", systemImage: fav ? "star.slash" : "star", tint: .yellow) {
+            app.toggleFavorite(issue.id)
+        }
+    }
+
+    private func takeAction(_ issue: Issue) -> EdgeAction? {
+        guard issue.assignedTo?.id != app.settings.userId && !issue.status.isClosed else { return nil }
+        return EdgeAction(title: "Take", systemImage: "person.crop.circle.badge.checkmark", tint: .accentColor) { assign(issue) }
+    }
 
     private func assign(_ issue: Issue) {
         Task {
@@ -271,6 +313,7 @@ struct IssueRow: View {
 
             Text(issue.subject)
                 .font(.headline)
+                .strikethrough(issue.status.isClosed, color: .secondary)
                 .lineLimit(typeSize.isAccessibilitySize ? 4 : 2)
 
             let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2)) : AnyLayout(HStackLayout(spacing: 6))

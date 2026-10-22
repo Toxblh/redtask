@@ -248,7 +248,7 @@ RU = {
 "Subtasks": "Подзадачи",
 "Table": "Таблица",
 "Take": "Взять",
-"Tap the star on an issue or swipe right on it in a list.": "Нажмите звёздочку в задаче или смахните строку списка вправо.",
+"Tap the star on an issue or swipe right from its edge in a list.": "Нажмите звёздочку в задаче или смахните строку списка вправо от её левого края.",
 "Text or #number": "Текст или #номер",
 "The issue was deleted or is no longer available": "Задача удалена или больше недоступна",
 "The private comment wasn’t quoted: you can’t write private notes, so a reply containing it would be visible to everyone. You can still reply without the quote.": "Приватный комментарий не процитирован: у вас нет права писать приватные заметки, и ответ с его текстом был бы виден всем. Ответить без цитаты можно.",
