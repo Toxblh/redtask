@@ -1,0 +1,104 @@
+import SwiftUI
+
+/// Поиск по задачам: текст (search.json) или номер «#123» / «123» — сразу эта задача.
+struct SearchView: View {
+    @Environment(AppModel.self) private var app
+    @Binding var selection: Int?
+    @State private var query = ""
+    @State private var byId: Issue?
+    @State private var results: [SearchResult] = []
+    @State private var total = 0
+    @State private var loading = false
+    @State private var error: String?
+    @AppStorage("recentSearches") private var recentRaw = ""
+
+    private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
+
+    var body: some View {
+        List(selection: $selection) {
+            if query.isEmpty && !recent.isEmpty {
+                Section("Recent") {
+                    ForEach(recent, id: \.self) { r in
+                        Button { query = r } label: { Label(r, systemImage: "clock.arrow.circlepath") }
+                            .foregroundStyle(.primary)
+                    }
+                }
+            }
+            if let i = byId {
+                Section("By number") {
+                    IssueRow(issue: i).tag(i.id).contextMenu { IssueMenu(issue: i) }
+                }
+            }
+            if !results.isEmpty {
+                Section {
+                    ForEach(results) { r in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(r.title).font(.headline).lineLimit(3)
+                            if !r.description.isEmpty {
+                                Text(r.description).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                            }
+                            Text(Fmt.relative(r.datetime)).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .tag(r.id)
+                        .onAppear { if r.id == results.last?.id { Task { await more() } } }
+                    }
+                } header: {
+                    Text("Found: \(total)")
+                }
+            }
+        }
+        .listStyle(.plain)
+        .navigationTitle("Search")
+        .searchable(text: $query, placement: .automatic, prompt: Text("Text or #number"))
+        .onSubmit(of: .search) { remember(query) }
+        .overlay {
+            if !query.isEmpty && results.isEmpty && byId == nil {
+                if loading { ProgressView() }
+                else if let error { LoadErrorView(message: error) { Task { await search() } } }
+                else { ContentUnavailableView.search(text: query) }
+            } else if query.isEmpty && recent.isEmpty {
+                ContentUnavailableView("Search issues", systemImage: "magnifyingglass",
+                                       description: Text("Type text from the subject or description, or an issue number."))
+            }
+        }
+        .task(id: query) {
+            try? await Task.sleep(for: .milliseconds(400))
+            if !Task.isCancelled { await search() }
+        }
+    }
+
+    private func remember(_ q: String) {
+        let s = q.trimmingCharacters(in: .whitespaces)
+        guard !s.isEmpty else { return }
+        recentRaw = ([s] + recent.filter { $0 != s }).prefix(8).joined(separator: "\n")
+    }
+
+    private func search() async {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard let api = app.api, !q.isEmpty else { results = []; byId = nil; return }
+        loading = true
+        defer { loading = false }
+        let bare = q.hasPrefix("#") ? String(q.dropFirst()) : q
+        do {
+            if let id = Int(bare), id > 0 {
+                byId = try? await api.issue(id)
+                if bare == q || q.hasPrefix("#") { results = []; total = 0; error = nil; return }
+            } else { byId = nil }
+            let r = try await api.searchPage(q)
+            results = r.results
+            total = r.totalCount
+            error = nil
+        } catch {
+            if !(error is CancellationError) { self.error = error.localizedDescription }
+        }
+    }
+
+    private func more() async {
+        guard let api = app.api, results.count < total else { return }
+        if let r = try? await api.searchPage(query, offset: results.count) {
+            let known = Set(results.map(\.id))
+            results += r.results.filter { !known.contains($0.id) }
+            if r.results.isEmpty { total = results.count }
+        }
+    }
+}

@@ -1,0 +1,9 @@
+.env*
+*.xcodeproj
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+shots/
+*.xcloc
