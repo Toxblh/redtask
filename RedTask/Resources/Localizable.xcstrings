@@ -1,8 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "" : {},
-    "—" : {},
+    "" : {
+
+    },
+    "—" : {
+
+    },
     "(total %@)" : {
       "localizations" : {
         "ru" : {
@@ -29,7 +33,9 @@
         }
       }
     },
-    "%@\n" : {},
+    "%@\n" : {
+
+    },
     "%@ · %@" : {
       "localizations" : {
         "en" : {
@@ -194,7 +200,9 @@
         }
       }
     },
-    "•" : {},
+    "•" : {
+
+    },
     "+%lld d" : {
       "localizations" : {
         "ru" : {
@@ -205,7 +213,9 @@
         }
       }
     },
-    "0" : {},
+    "0" : {
+
+    },
     "A client for your Redmine server" : {
       "localizations" : {
         "ru" : {

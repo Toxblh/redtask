@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import SafariServices
+import QuickLook
 
 // MARK: - Форматирование
 
@@ -271,84 +272,140 @@ struct EdgeAction {
 }
 
 extension View {
-    /// Свайп от края строки — действие (как «Ответить» в Telegram); свайп из середины — переключение фильтра.
-    func edgeSwipe(leading: EdgeAction?, trailing: EdgeAction?) -> some View {
-        modifier(EdgeSwipe(leading: leading, trailing: trailing))
+    /// Свайп от края строки открывает кнопку действия (как в Telegram), длинный свайп — сразу выполняет.
+    /// Одновременно открыта одна строка: `open` — её id. Отступы строки задаёт сам модификатор.
+    func edgeSwipe(id: Int, open: Binding<Int?>, leading: EdgeAction?, trailing: EdgeAction?) -> some View {
+        modifier(EdgeSwipe(id: id, open: open, leading: leading, trailing: trailing))
     }
 
-    /// Горизонтальный свайп, начатый не у края: шаг +1 (влево, к следующему) или −1.
-    func middleSwipe(_ onSwipe: @escaping (Int) -> Void) -> some View {
-        modifier(MiddleSwipe(onSwipe: onSwipe))
+    /// Горизонтальный пан не от края: сдвиг за пальцем и конец жеста (сдвиг, скорость).
+    func middleSwipe(changed: @escaping (CGFloat) -> Void, ended: @escaping (CGFloat, CGFloat) -> Void) -> some View {
+        modifier(MiddleSwipe(changed: changed, ended: ended))
     }
 }
 
 private struct EdgeSwipe: ViewModifier {
+    let id: Int
+    @Binding var open: Int?
     let leading: EdgeAction?
     let trailing: EdgeAction?
     @State private var offset: CGFloat = 0
+    /// Сдвиг в начале жеста: открытая строка тянется от своей открытой позиции.
+    @State private var base: CGFloat = 0
     @State private var frame: CGRect = .zero
-    private let threshold: CGFloat = 72
 
+    /// Ширина открытой кнопки — слот Telegram (60) с полями.
+    private let slot: CGFloat = 76
+    /// Дальше этого сдвига отпускание выполняет действие сразу.
+    private var full: CGFloat { max(slot * 2.2, frame.width * 0.5) }
     private var current: EdgeAction? { offset > 0 ? leading : offset < 0 ? trailing : nil }
 
     func body(content: Content) -> some View {
         content
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(offset == 0 ? Color.clear : Color(.systemBackground))
-            .offset(x: offset)
             .background {
-                if let a = current {
-                    let armed = abs(offset) >= threshold
-                    Image(systemName: a.systemImage)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .scaleEffect(armed ? 1.15 : 0.85)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: offset > 0 ? .leading : .trailing)
-                        .padding(.horizontal, 20)
-                        .background(armed ? a.tint : a.tint.opacity(0.5))
-                        .padding(.horizontal, -20).padding(.vertical, -8) // во всю строку, за отступы списка
-                        .animation(.snappy, value: armed)
+                if offset != 0 { Color(.secondarySystemBackground) }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: offset == 0 ? 0 : 22, style: .continuous))
+            .overlay {
+                // открытая строка: тап по ней закрывает кнопки, а не открывает задачу
+                if open == id && offset != 0 {
+                    Color.clear.contentShape(Rectangle()).onTapGesture { close() }
                 }
             }
+            .offset(x: offset)
+            .background { if let a = current { button(a) } }
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
-            .gesture(EdgePan(frame: frame, leading: leading != nil, trailing: trailing != nil) { dx in
-                let was = abs(offset) >= threshold
-                offset = dx > 0 ? (leading == nil ? 0 : rubber(dx)) : (trailing == nil ? 0 : -rubber(-dx))
-                if was != (abs(offset) >= threshold) { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
-            } ended: { _ in
-                if abs(offset) >= threshold { current?.action() }
-                withAnimation(.snappy) { offset = 0 }
+            .gesture(EdgePan(frame: frame, leading: leading != nil, trailing: trailing != nil, anywhere: offset != 0) { dx in
+                if base == 0 && offset != 0 { base = offset }
+                let was = abs(offset) >= full
+                let x = base + dx
+                offset = x > 0 ? (leading == nil ? 0 : x) : (trailing == nil ? 0 : x)
+                if was != (abs(offset) >= full) { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
+            } ended: { _, vx in
+                settle(vx)
             })
+            .onChange(of: open) { if open != id && offset != 0 { withAnimation(.snappy) { offset = 0 } } }
             .accessibilityActions {
                 if let leading { Button(leading.title, action: leading.action) }
                 if let trailing { Button(trailing.title, action: trailing.action) }
             }
     }
 
-    private func rubber(_ x: CGFloat) -> CGFloat { x < threshold ? x : threshold + (x - threshold) * 0.35 }
+    /// Кнопка-круг с подписью; при длинном свайпе едет за строкой.
+    private func button(_ a: EdgeAction) -> some View {
+        let progress = min(1, abs(offset) / slot)
+        let armed = abs(offset) >= full
+        return Button {
+            a.action()
+            close()
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: a.systemImage)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 50, height: 50)
+                    .background(a.tint, in: Circle())
+                    .scaleEffect(armed ? 1.1 : 0.6 + 0.4 * progress)
+                Text(a.title).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .opacity(progress)
+            .frame(width: max(slot, abs(offset)), alignment: armed ? (offset > 0 ? .trailing : .leading) : .center)
+            .animation(.snappy, value: armed)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityHidden(true)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: offset > 0 ? .leading : .trailing)
+    }
+
+    private func settle(_ vx: CGFloat) {
+        let x = offset
+        base = 0
+        if abs(x) >= full {
+            current?.action()
+            close()
+        } else if (x > slot / 2 || (x > 0 && vx > 300)) && !(vx < -300) {
+            withAnimation(.snappy) { offset = slot }
+            open = id
+        } else if (x < -slot / 2 || (x < 0 && vx < -300)) && !(vx > 300) {
+            withAnimation(.snappy) { offset = -slot }
+            open = id
+        } else {
+            close()
+        }
+    }
+
+    private func close() {
+        withAnimation(.snappy) { offset = 0 }
+        base = 0
+        if open == id { open = nil }
+    }
 }
 
 private struct MiddleSwipe: ViewModifier {
-    let onSwipe: (Int) -> Void
+    let changed: (CGFloat) -> Void
+    let ended: (CGFloat, CGFloat) -> Void
     @State private var frame: CGRect = .zero
 
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
-            .gesture(EdgePan(frame: frame, leading: true, trailing: true, middle: true) { _ in } ended: { dx in
-                if abs(dx) > 60 { onSwipe(dx < 0 ? 1 : -1) }
-            })
+            .gesture(EdgePan(frame: frame, leading: true, trailing: true, middle: true, changed: changed, ended: ended))
     }
 }
 
-/// Горизонтальный пан, начатый у края строки (или, с `middle`, не у края): прокрутка ждёт его отказа, иначе жест её.
+/// Горизонтальный пан: у края строки (`middle` — наоборот, не у края; `anywhere` — где угодно).
+/// Прокрутка ждёт его отказа: вертикальный жест он отдаёт сразу.
 private struct EdgePan: UIGestureRecognizerRepresentable {
     let frame: CGRect
     let leading: Bool
     let trailing: Bool
     var middle = false
+    var anywhere = false
     let changed: (CGFloat) -> Void
-    let ended: (CGFloat) -> Void
+    let ended: (CGFloat, CGFloat) -> Void
 
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
 
@@ -359,17 +416,15 @@ private struct EdgePan: UIGestureRecognizerRepresentable {
     }
 
     func updateUIGestureRecognizer(_ g: UIPanGestureRecognizer, context: Context) {
-        context.coordinator.frame = frame
-        context.coordinator.leading = leading
-        context.coordinator.trailing = trailing
-        context.coordinator.middle = middle
+        let c = context.coordinator
+        c.frame = frame; c.leading = leading; c.trailing = trailing; c.middle = middle; c.anywhere = anywhere
     }
 
     func handleUIGestureRecognizerAction(_ g: UIPanGestureRecognizer, context: Context) {
         switch g.state {
         case .changed: changed(g.translation(in: nil).x)
-        case .ended: ended(g.translation(in: nil).x)
-        case .cancelled, .failed: ended(0)
+        case .ended: ended(g.translation(in: nil).x, g.velocity(in: nil).x)
+        case .cancelled, .failed: ended(0, 0)
         default: break
         }
     }
@@ -379,15 +434,17 @@ private struct EdgePan: UIGestureRecognizerRepresentable {
         var leading = false
         var trailing = false
         var middle = false
-        /// Ширина зоны у края строки, откуда свайп — действие.
-        let edge: CGFloat = 36
+        var anywhere = false
+        /// Зона у края строки, откуда свайп — действие (у Telegram край для «назад» — 1/6 ширины, 22…80).
+        let edge: CGFloat = 44
 
         func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
             guard let p = g as? UIPanGestureRecognizer else { return false }
             let v = p.velocity(in: nil), t = p.translation(in: nil)
-            guard abs(v.x) > abs(v.y) else { return false }
+            guard abs(v.x) > abs(v.y) * 1.2 else { return false }
             let x = p.location(in: nil).x - t.x
-            if middle { return abs(v.x) > abs(v.y) * 1.5 && x > frame.minX + edge && x < frame.maxX - edge }
+            if anywhere { return true }
+            if middle { return x > frame.minX + edge && x < frame.maxX - edge }
             return (leading && v.x > 0 && x < frame.minX + edge) || (trailing && v.x < 0 && x > frame.maxX - edge)
         }
 
@@ -395,4 +452,25 @@ private struct EdgePan: UIGestureRecognizerRepresentable {
             other.view is UIScrollView
         }
     }
+}
+
+/// Предпросмотр файла системным QuickLook, показанным из UIKit: так он закрывается смахиванием вниз,
+/// как в «Файлах» и «Почте» (SwiftUI-модификатор `.quickLookPreview` этого не умеет).
+@MainActor func presentQuickLook(_ url: URL) {
+    let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first { $0.activationState == .foregroundActive }
+    guard var top = scene?.keyWindow?.rootViewController else { return }
+    while let p = top.presentedViewController { top = p }
+    top.present(FilePreview(url: url), animated: true)
+}
+
+private final class FilePreview: QLPreviewController, QLPreviewControllerDataSource {
+    let url: URL
+    init(url: URL) {
+        self.url = url
+        super.init(nibName: nil, bundle: nil)
+        dataSource = self
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
+    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { url as NSURL }
 }

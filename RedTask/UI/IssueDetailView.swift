@@ -41,7 +41,6 @@ struct IssueDetailView: View {
     @State private var model: IssueDetailModel
     @State private var tab: ActivityTab = .comments
     @State private var sheet: DetailSheet?
-    @State private var preview: URL?
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var importing = false
     @State private var confirmDelete: ConfirmDelete?
@@ -99,7 +98,6 @@ struct IssueDetailView: View {
         .toolbar(hSize == .compact && model.issue != nil ? .hidden : .automatic, for: .tabBar)
         .environment(\.openURL, OpenURLAction { url in handle(url) })
         .sheet(item: $sheet) { s in sheetView(s) }
-        .quickLookPreview($preview)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
             if case .success(let urls) = r { sheet = .upload(urls.compactMap(readFile)) }
         }
@@ -644,7 +642,7 @@ struct IssueDetailView: View {
                 try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                 let file = dir.appendingPathComponent(a.filename.isEmpty ? "file" : a.filename)
                 try data.write(to: file, options: .atomic)
-                preview = file
+                presentQuickLook(file)
             } catch {
                 model.actionError = error.localizedDescription
             }
@@ -833,7 +831,15 @@ struct AttachmentRow: View {
                 if let thumb {
                     Image(uiImage: thumb).resizable().scaledToFill()
                 } else {
-                    Image(systemName: icon).font(.title3).foregroundStyle(.secondary)
+                    // значок и расширение, как на Android: odt от docx отличим с первого взгляда
+                    VStack(spacing: 1) {
+                        Image(systemName: icon).font(.body)
+                        if !ext.isEmpty {
+                            Text(verbatim: ext.uppercased()).font(.system(size: 9, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 3)
                 }
             }
             .frame(width: 48, height: 48)
@@ -853,8 +859,10 @@ struct AttachmentRow: View {
         }
     }
 
+    private var ext: String { (attachment.filename as NSString).pathExtension }
+
     private var icon: String {
-        let t = UTType(filenameExtension: (attachment.filename as NSString).pathExtension)
+        let t = UTType(filenameExtension: ext)
         if t?.conforms(to: .image) == true { return "photo" }
         if t?.conforms(to: .pdf) == true { return "doc.richtext" }
         if t?.conforms(to: .archive) == true { return "doc.zipper" }

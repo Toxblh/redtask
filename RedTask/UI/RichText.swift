@@ -37,6 +37,9 @@ final class MentionStore {
             tried.insert(l)
             if let p = await refs.personByLogin(l) {
                 known[l] = (p.id, p.shortName.isEmpty ? l : p.shortName)
+            } else {
+                // сбой сети или капча — попробуем при следующем показе; честный «нет такого» RefData помнит сам
+                tried.remove(l)
             }
         }
     }
@@ -59,7 +62,10 @@ final class InlineAvatars {
                 let side: CGFloat = 18
                 images[id] = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
                     UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side)).addClip()
-                    img.draw(in: CGRect(x: 0, y: 0, width: side, height: side))
+                    // по короткой стороне, как scaledToFill: неквадратное фото не сплющивается
+                    let k = side / max(1, min(img.size.width, img.size.height))
+                    let w = img.size.width * k, h = img.size.height * k
+                    img.draw(in: CGRect(x: (side - w) / 2, y: (side - h) / 2, width: w, height: h))
                 }
             }
         }
