@@ -186,18 +186,19 @@ private struct TableBlock: View {
     let ctx: RichContext
 
     var body: some View {
+        // До 4 колонок — по ширине экрана; шире — прокрутка вбок с колонками фиксированной ширины
+        // (Grid в горизонтальной прокрутке не учитывает перенос текста в высоте строки).
+        // Заливки строк нет: в Grid фон ложится на каждую ячейку по высоте её текста.
         let wide = (rows.map { $0.reduce(0) { $0 + $1.span } }.max() ?? 0) > 4
         let grid = Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
-                // фон на GridRow лёг бы на каждую ячейку по высоте её текста — тянем ячейки на высоту строки
-                let fill = row.allSatisfy(\.header) ? Color(.tertiarySystemFill) : i % 2 == 1 ? Color(.quaternarySystemFill) : .clear
+                if i > 0 { Divider().gridCellUnsizedAxes(.horizontal) }
                 GridRow {
                     ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
                         InlineText(lines: [.plain(cell.text)], ctx: ctx, muted: false, bold: cell.header)
-                            .frame(minWidth: wide ? 120 : 0, maxWidth: wide ? 240 : .infinity, alignment: .leading)
+                            .frame(width: wide ? 160 * CGFloat(cell.span) : nil, alignment: .leading)
+                            .frame(maxWidth: wide ? nil : .infinity, alignment: .leading)
                             .padding(.horizontal, 8).padding(.vertical, 6)
-                            .frame(maxHeight: .infinity)
-                            .background(fill)
                             .gridCellColumns(cell.span)
                     }
                 }

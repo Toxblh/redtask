@@ -80,6 +80,11 @@ struct IssueDetailView: View {
                 #endif
                 await model.load(app)
                 if let note { scroll(to: note, proxy) }
+                #if DEBUG
+                // снимки: -RTField <id поля> — прокрутить к длинному настраиваемому полю
+                let field = UserDefaults.standard.integer(forKey: "RTField")
+                if field > 0 { try? await Task.sleep(for: .milliseconds(800)); proxy.scrollTo("cf-\(field)", anchor: .top) }
+                #endif
             }
             .onReceive(NotificationCenter.default.publisher(for: .scrollToNote)) { n in
                 guard n.userInfo?["issue"] as? Int == issueId else { return }
@@ -320,6 +325,7 @@ struct IssueDetailView: View {
                     Text(f.name).font(.subheadline).foregroundStyle(.secondary)
                     RichText(text: shown, context: RichContext(attachments: issue.attachments, baseURL: app.api?.baseURL))
                 }
+                .id("cf-\(f.id)")
             } else {
                 LabeledContent(f.name) { Text(shown).textSelection(.enabled) }
             }
