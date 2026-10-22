@@ -13,6 +13,13 @@ enum Fmt {
         return d.formatted(date: .abbreviated, time: .omitted)
     }
 
+    /// «22 окт» — без года в текущем году и без точки сокращения: для тесных строк списка.
+    static func shortDate(_ iso: String?) -> String {
+        guard let d = dayDate(iso), Calendar.current.isDate(d, equalTo: Date(), toGranularity: .year) else { return date(iso) }
+        let s = d.formatted(.dateTime.day().month(.abbreviated))
+        return s.hasSuffix(".") ? String(s.dropLast()) : s
+    }
+
     static func dateTime(_ iso: String?) -> String {
         guard let d = parseRedmineDate(iso) else { return iso ?? "" }
         return d.formatted(date: .abbreviated, time: .shortened)

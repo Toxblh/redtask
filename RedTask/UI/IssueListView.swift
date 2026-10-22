@@ -384,7 +384,7 @@ struct IssueRow: View {
                     .lineLimit(1).layoutPriority(1) // ужимается имя исполнителя, а не приоритет
                 if let due = issue.dueDate {
                     let overdue = Fmt.isOverdue(due) && !closed
-                    HStack(spacing: 3) { Image(systemName: overdue ? "exclamationmark.circle" : "calendar"); Text(Fmt.date(due)) }
+                    HStack(spacing: 3) { Image(systemName: overdue ? "exclamationmark.circle" : "calendar"); Text(Fmt.shortDate(due)) }
                         .foregroundStyle(overdue ? .red : .secondary)
                         .lineLimit(1).layoutPriority(1)
                 }
