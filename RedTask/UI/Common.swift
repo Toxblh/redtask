@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import SafariServices
 
 // MARK: - Форматирование
 
@@ -217,4 +218,11 @@ func relationLabel(_ type: String) -> String {
     case "copied_from": String(localized: "Copied from")
     default: type
     }
+}
+
+/// Веб-версия внутри приложения (запасной путь, когда REST не разрешает действие).
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> SFSafariViewController { SFSafariViewController(url: url) }
+    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }

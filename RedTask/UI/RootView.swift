@@ -81,6 +81,7 @@ struct RootView: View {
                             .navigationDestination(for: IssueLink.self) { l in
                                 IssueDetailView(issueId: l.id, note: l.note, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
                             }
+                            .environment(\.navigate) { path.append($0) }
                     } else {
                         ContentUnavailableView("Select an issue", systemImage: "checklist")
                     }

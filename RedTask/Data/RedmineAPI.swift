@@ -245,7 +245,7 @@ final class RedmineAPI: Sendable {
     }
 
     @discardableResult
-    private func send(_ method: String, _ path: String, _ payload: [String: Any]) async throws -> Data {
+    nonisolated(nonsending) private func send(_ method: String, _ path: String, _ payload: [String: Any]) async throws -> Data {
         var r = request(url(path), method: method)
         r.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         r.httpBody = try JSONSerialization.data(withJSONObject: payload)
@@ -394,7 +394,8 @@ final class RedmineAPI: Sendable {
     func markMentionFilterUnsupported() { memo.withLock { $0.mentionFilterUnsupported = true } }
 
     /// PUT задачи; fields — содержимое «issue». Сброс значения — пустая строка (так ждёт Redmine).
-    func updateIssue(_ id: Int, _ fields: [String: Any], uploads: [UploadRef] = []) async throws {
+    /// nonisolated(nonsending): словарь [String: Any] не Sendable — сериализуется на стороне вызывающего.
+    nonisolated(nonsending) func updateIssue(_ id: Int, _ fields: [String: Any], uploads: [UploadRef] = []) async throws {
         var f = fields
         if !uploads.isEmpty { f["uploads"] = Self.uploadsJSON(uploads) }
         try await send("PUT", "issues/\(id).json", ["issue": f])
@@ -409,7 +410,7 @@ final class RedmineAPI: Sendable {
         }
     }
 
-    func createIssue(_ fields: [String: Any]) async throws -> Issue {
+    nonisolated(nonsending) func createIssue(_ fields: [String: Any]) async throws -> Issue {
         let data = try await send("POST", "issues.json", ["issue": fields])
         return try JSON.decoder().decode(IssueResponse.self, from: data).issue
     }
