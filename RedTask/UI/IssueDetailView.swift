@@ -123,6 +123,9 @@ struct IssueDetailView: View {
             // якорь — событие ленты этого журнала (комментарий или первое его действие)
             if let target = model.activity.first(where: { $0.journalId == journal && (tab != .comments || { if case .comment = $0 { true } else { false } }($0)) }) {
                 withAnimation { proxy.scrollTo(target.id, anchor: .top) }
+                // ленивый List досчитывает высоты строк по дороге — второй проход попадает точно
+                try? await Task.sleep(for: .milliseconds(400))
+                proxy.scrollTo(target.id, anchor: .top)
             }
             try? await Task.sleep(for: .seconds(3))
             withAnimation { highlighted = nil }

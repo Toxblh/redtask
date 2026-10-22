@@ -13,6 +13,7 @@ struct RedTaskApp: App {
                 if app.isLoggedIn { RootView() } else { LoginView() }
             }
             .environment(app)
+            .tint(Color("AccentColor"))
             .onOpenURL { app.handle(url: $0) }
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { a in
                 if let u = a.webpageURL { app.handle(url: u) }
