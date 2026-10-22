@@ -95,7 +95,10 @@ final class AppModel {
         settings = s
         connect(url: url, key: key)
         unreadCount = 0
+        // тихое разрешение: без системного вопроса при входе (HIG — спрашивать по месту)
+        await Poller.requestProvisional()
         Poller.schedule()
+        Poller.foreground()
     }
 
     /// Выход: ключ, кэши учётки, избранное. Настройки уведомлений остаются — тот же человек не настраивает их заново.
@@ -107,6 +110,8 @@ final class AppModel {
         UNUserNotificationCenter.current().setBadgeCount(0)
         api = nil
         refs = nil
+        MentionStore.shared.clear()
+        Task { await ImageStore.shared.clear() }
         var s = settings
         s.userId = 0
         s.userName = ""

@@ -18,6 +18,8 @@ struct RedTaskApp: App {
                 if let u = a.webpageURL { app.handle(url: u) }
             }
         }
+        // фоновая проверка: когда её запустить, решает iOS (честно: не по расписанию)
+        .backgroundTask(.appRefresh(Poller.taskId)) { await Poller.poll() }
         .onChange(of: phase) { _, p in
             // возврат в приложение — честная проверка вместо фоновой, которую iOS запускает когда захочет
             if p == .active { Poller.foreground() }
