@@ -870,11 +870,13 @@ struct AttachmentRow: View {
 /// Статус задачи капсулой: цвет — не единственный признак, название всегда написано.
 struct StatusPill: View {
     let status: IssueStatus
+    var compact = false
     var body: some View {
         Text(status.name)
-            .font(.subheadline.weight(.semibold))
+            .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+            .lineLimit(1)
             .foregroundStyle(statusTint(status))
-            .padding(.horizontal, 10).padding(.vertical, 4)
+            .padding(.horizontal, compact ? 7 : 10).padding(.vertical, compact ? 2 : 4)
             .background(statusTint(status).opacity(0.14), in: Capsule())
             .accessibilityLabel(Text("Status: \(status.name)"))
     }

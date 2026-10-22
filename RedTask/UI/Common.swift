@@ -271,9 +271,14 @@ struct EdgeAction {
 }
 
 extension View {
-    /// Свайп от края строки — действие (как «Ответить» в Telegram); свайп из середины уходит пейджеру фильтров.
+    /// Свайп от края строки — действие (как «Ответить» в Telegram); свайп из середины — переключение фильтра.
     func edgeSwipe(leading: EdgeAction?, trailing: EdgeAction?) -> some View {
         modifier(EdgeSwipe(leading: leading, trailing: trailing))
+    }
+
+    /// Горизонтальный свайп, начатый не у края: шаг +1 (влево, к следующему) или −1.
+    func middleSwipe(_ onSwipe: @escaping (Int) -> Void) -> some View {
+        modifier(MiddleSwipe(onSwipe: onSwipe))
     }
 }
 
@@ -310,7 +315,7 @@ private struct EdgeSwipe: ViewModifier {
                 let was = abs(offset) >= threshold
                 offset = dx > 0 ? (leading == nil ? 0 : rubber(dx)) : (trailing == nil ? 0 : -rubber(-dx))
                 if was != (abs(offset) >= threshold) { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
-            } ended: {
+            } ended: { _ in
                 if abs(offset) >= threshold { current?.action() }
                 withAnimation(.snappy) { offset = 0 }
             })
@@ -323,13 +328,27 @@ private struct EdgeSwipe: ViewModifier {
     private func rubber(_ x: CGFloat) -> CGFloat { x < threshold ? x : threshold + (x - threshold) * 0.35 }
 }
 
-/// Горизонтальный пан, начатый у края строки: пейджер и список ждут его отказа, иначе жест их.
+private struct MiddleSwipe: ViewModifier {
+    let onSwipe: (Int) -> Void
+    @State private var frame: CGRect = .zero
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
+            .gesture(EdgePan(frame: frame, leading: true, trailing: true, middle: true) { _ in } ended: { dx in
+                if abs(dx) > 60 { onSwipe(dx < 0 ? 1 : -1) }
+            })
+    }
+}
+
+/// Горизонтальный пан, начатый у края строки (или, с `middle`, не у края): прокрутка ждёт его отказа, иначе жест её.
 private struct EdgePan: UIGestureRecognizerRepresentable {
     let frame: CGRect
     let leading: Bool
     let trailing: Bool
+    var middle = false
     let changed: (CGFloat) -> Void
-    let ended: () -> Void
+    let ended: (CGFloat) -> Void
 
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
 
@@ -343,12 +362,14 @@ private struct EdgePan: UIGestureRecognizerRepresentable {
         context.coordinator.frame = frame
         context.coordinator.leading = leading
         context.coordinator.trailing = trailing
+        context.coordinator.middle = middle
     }
 
     func handleUIGestureRecognizerAction(_ g: UIPanGestureRecognizer, context: Context) {
         switch g.state {
         case .changed: changed(g.translation(in: nil).x)
-        case .ended, .cancelled, .failed: ended()
+        case .ended: ended(g.translation(in: nil).x)
+        case .cancelled, .failed: ended(0)
         default: break
         }
     }
@@ -357,6 +378,7 @@ private struct EdgePan: UIGestureRecognizerRepresentable {
         var frame: CGRect = .zero
         var leading = false
         var trailing = false
+        var middle = false
         /// Ширина зоны у края строки, откуда свайп — действие.
         let edge: CGFloat = 36
 
@@ -365,6 +387,7 @@ private struct EdgePan: UIGestureRecognizerRepresentable {
             let v = p.velocity(in: nil), t = p.translation(in: nil)
             guard abs(v.x) > abs(v.y) else { return false }
             let x = p.location(in: nil).x - t.x
+            if middle { return abs(v.x) > abs(v.y) * 1.5 && x > frame.minX + edge && x < frame.maxX - edge }
             return (leading && v.x > 0 && x < frame.minX + edge) || (trailing && v.x < 0 && x > frame.maxX - edge)
         }
 
