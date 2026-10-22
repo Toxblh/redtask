@@ -155,3 +155,13 @@ struct TextileEditTests {
         #expect(TextileEdit.continueList("текст\n", cursor: 6) == nil)
     }
 }
+
+@Suite("Textile: таблицы")
+struct TableCellTests {
+    @Test func headerWithoutSpace() {
+        // RedCloth не требует пробела после «.»: так пишут шаблоны полей на сервере
+        let c = parseCells("|_.Статья |_.б/н | 7700.00 |")
+        #expect(c.map(\.header) == [true, true, false])
+        #expect(c.map(\.text) == ["Статья", "б/н", "7700.00"])
+    }
+}

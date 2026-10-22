@@ -85,7 +85,7 @@ enum Textile {
     static let entityRe = RE(#"&(amp|lt|gt|quot|apos|nbsp|#\d{1,7}|#[xX][0-9a-fA-F]{1,6});"#)
     static let preOpenRe = RE(#"<pre(?:\s[^<>]*)?>"#)
     static let codeTagRe = RE(#"</?code(?:\s[^<>]*)?>"#)
-    static let cellModRe = RE(#"^((?:_|\\\d+|/\d+|[<>=^~]|\{[^}]*\}){1,8})\.(?:\s+|$)(.*)"#)
+    static let cellModRe = RE(#"^((?:_|\\\d+|/\d+|[<>=^~]|\{[^}]*\}){1,8})\.\s*(.*)"#)
     static let cellSpanRe = RE(#"\\(\d+)"#)
     /// !file.png!, !>file.png!, !{width: Npx}.file.png!, !http://…! — имя обязано кончаться расширением картинки.
     static let imageRe = RE(#"(?<![\p{L}\p{N}_!])![<>=]?(?:\{[^}!]*\}|\([^)!]*\))?\.?\s?(https?://[^\s!()]+|[^\s!()/]+\.(?:png|jpe?g|jpe|gif|bmp|webp))\s?(?:\([^)!]*\))?!(?::https?://\S+)?(?![\p{L}\p{N}_])"#, caseInsensitive: true)
