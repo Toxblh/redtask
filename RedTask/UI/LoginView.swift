@@ -66,6 +66,15 @@ struct LoginView: View {
                 } footer: {
                     if manual { Text("My account → API access key → Show") }
                 }
+                // вторичное действие (HIG): без сервера — посмотреть приложение на выдуманных данных
+                Section {
+                    Button("Try Demo") { app.enterDemo() }
+                        .frame(maxWidth: .infinity)
+                } footer: {
+                    Text("No Redmine server at hand? Explore the app with sample data. Nothing is sent anywhere.")
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
+                }
             }
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)

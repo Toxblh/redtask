@@ -23,7 +23,10 @@ struct RedTaskApp: App {
         .backgroundTask(.appRefresh(Poller.taskId)) { await Poller.poll() }
         .onChange(of: phase) { _, p in
             // возврат в приложение — честная проверка вместо фоновой, которую iOS запускает когда захочет
-            if p == .active { Poller.foreground() }
+            if p == .active {
+                Poller.foreground()
+                Task { await app.refreshFavorites() }
+            }
         }
     }
 }

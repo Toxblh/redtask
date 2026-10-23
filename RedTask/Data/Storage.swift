@@ -54,7 +54,12 @@ struct AppSettings: Codable, Sendable, Equatable {
     var userLogin = ""
     var notificationsEnabled = true
     var lastCheck: Date?
+    /// Избранное сервера (кэш набора, источник правды — сервер).
     var favorites: [Int] = []
+    /// Избранное прежних версий (хранилось только здесь) — ждёт переноса на сервер.
+    var favoritesPending: [Int] = []
+    /// Локальное избранное уже переложено в очередь переноса.
+    var favoritesMigrated = false
     /// Выключенные категории уведомлений — значения NotifType.
     var notifMuted: Set<String> = NotifCategory.defaultMuted
     var notifFlags: Set<NotifFlag> = Set(NotifFlag.allCases.filter(\.defaultOn))
@@ -101,9 +106,29 @@ struct AppSettings: Codable, Sendable, Equatable {
     }
 
     static func load() -> AppSettings {
-        // поля, появившиеся в новой версии, берутся по умолчанию — сохранённое старой версией читается
-        guard let d = UserDefaults.standard.data(forKey: "settings"),
-              let stored = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+        guard let d = UserDefaults.standard.data(forKey: "settings") else { return AppSettings(favoritesMigrated: true) }
+        return decode(d)
+    }
+
+    /// Что из очереди переноса ещё не на сервере.
+    static func favoritesToMigrate(pending: [Int], server: Set<Int>) -> [Int] { pending.filter { !server.contains($0) } }
+
+    /**
+     Поля, появившиеся в новой версии, берутся по умолчанию — сохранённое старой версией читается.
+     Избранное старой версии было локальным: однажды уходит в очередь переноса на сервер.
+     */
+    static func decode(_ d: Data) -> AppSettings {
+        var s = merged(d)
+        if !s.favoritesMigrated {
+            s.favoritesPending = s.favorites
+            s.favorites = []
+            s.favoritesMigrated = true
+        }
+        return s
+    }
+
+    private static func merged(_ d: Data) -> AppSettings {
+        guard let stored = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
               let defData = try? JSONEncoder().encode(AppSettings()),
               let def = (try? JSONSerialization.jsonObject(with: defData)) as? [String: Any],
               let merged = try? JSONSerialization.data(withJSONObject: def.merging(stored) { $1 }),

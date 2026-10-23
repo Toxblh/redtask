@@ -21,12 +21,22 @@
 4. **URL политики конфиденциальности** (обязателен). Суть текста: приложение не собирает данных; адрес сервера,
    API-ключ и кэш задач хранятся только на устройстве; запросы идут только на указанный пользователем сервер Redmine.
 5. **App Privacy** в App Store Connect: «Data Not Collected».
-6. **Демо-доступ для ревью** (Guideline 2.1): тестовый Redmine-сервер и API-ключ/логин-пароль в App Review
-   Information. Без него ревью отклонит приложение, работающее только с корпоративным сервером. Желательно
-   тестовая учётка на публичном сервере без WAF-капчи.
+6. **Демо-доступ для ревью** (Guideline 2.1) — сервер не нужен: на экране входа есть кнопка «Try Demo» /
+   «Попробовать без сервера». Демо работает офлайн на встроенных выдуманных данных (4 проекта, 26 задач,
+   люди, комментарии, время, вложения, колокольчик), действия — в памяти, перезапуск сбрасывает демо,
+   выход — «Sign Out» в настройках (там же плашка «Demo»). Сеть в демо не используется
+   (транспорт `DemoServer`, URLProtocol). В App Review Information:
+   - Sign-in required: **No** (или Yes с пояснением ниже — поля логина можно оставить пустыми);
+   - Notes:
+     > RedTask is a client for self-hosted Redmine servers, so it normally needs the user's own server.
+     > To review the app without a server, tap **Try Demo** at the bottom of the sign-in screen. The demo
+     > runs fully offline on built-in sample data; all actions (comments, status, assignee, time logging,
+     > favorites, new issues) work in memory and reset on relaunch. To leave the demo, open Settings
+     > (gear icon) → Sign Out.
 7. **Скриншоты**: iPhone 6.9" (1320×2868 или 1290×2796) — обязательно; iPad 13" (2064×2752) — раз приложение
-   универсальное. Снимать: список «Мои», экран задачи с комментариями, редактор комментария, колокольчик,
-   iPad со сайдбаром. `xcrun simctl io <udid> screenshot` на iPhone 17 Pro Max / iPad Pro 13".
+   универсальное. Сняты в демо (`-RTDemo YES`, светлая тема, ru и en) в `docs/screenshots/appstore/`:
+   список «Мои», задача с Textile, задача с комментариями, редактор комментария, колокольчик, карточка человека.
+   Отладочные аргументы — только в Debug-сборке; снимки с ними чистые (без отладочных плашек).
 8. **Описание, ключевые слова, URL поддержки, возрастной рейтинг** (4+, без пользовательского контента от
    приложения — контент приходит с сервера пользователя), категория Productivity.
 9. **Иконка**: заменить заготовку финальной (1024×1024, без альфы) — лучше через Icon Composer (`.icon`).

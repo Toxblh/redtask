@@ -28,7 +28,7 @@ struct ProjectsView: View {
                 }
                 .contextMenu {
                     Button { copyToPasteboard(p.identifier) } label: { Label("Copy identifier", systemImage: "doc.on.doc") }
-                    if let api = app.api {
+                    if let api = app.api, !app.isDemo {
                         Link(destination: api.baseURL.appendingPathComponent("projects/\(p.identifier)")) {
                             Label("Open in Safari", systemImage: "safari")
                         }

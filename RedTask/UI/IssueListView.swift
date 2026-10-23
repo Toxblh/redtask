@@ -39,7 +39,6 @@ final class IssueListModel {
     private(set) var error: String?
     /// Не удалось обновить, показан сохранённый список.
     private(set) var stale = false
-    private(set) var missingFavorites: [Int] = []
     private var generation = 0
     private var loadedEpoch = -1
     private var shownKey = ""
@@ -60,7 +59,7 @@ final class IssueListModel {
     }
 
     private var cacheKey: String { "\(kind.key)-\(filter.rawValue == "*" ? "all" : filter.rawValue)" }
-    var canLoadMore: Bool { kind != .favorites && issues.count < total && !loadingMore }
+    var canLoadMore: Bool { issues.count < total && !loadingMore }
 
     private func query(offset: Int) -> IssueQuery {
         var q = IssueQuery(statusFilter: filter.rawValue, limit: 50, offset: offset)
@@ -68,7 +67,7 @@ final class IssueListModel {
         case .mine: q.assignedToMe = true
         case .watched: q.watchedByMe = true
         case .project(let id, _): q.projectId = id
-        case .favorites: break
+        case .favorites: q.favorites = true
         }
         let s = query.trimmingCharacters(in: .whitespaces)
         if !s.isEmpty { q.subject = s }
@@ -92,20 +91,10 @@ final class IssueListModel {
         loading = true
         defer { if gen == generation { loading = false; loadedOnce = true } }
         do {
-            let fresh: [Issue]
-            if kind == .favorites {
-                let r = try await api.issuesByIds(app.settings.favorites)
-                missingFavorites = r.missing
-                fresh = r.found
-                    .filter { filter == .all || (filter == .closed) == $0.status.isClosed }
-                    .filter { !searching || $0.subject.localizedCaseInsensitiveContains(query) || "#\($0.id)".contains(query) }
-                    .sorted { $0.updatedOn > $1.updatedOn }
-                total = fresh.count
-            } else {
-                let page = try await api.issues(query(offset: 0))
-                fresh = page.issues
-                total = page.totalCount
-            }
+            if kind == .favorites && filter == .open { Task { await app.refreshFavorites() } }
+            let page = try await api.issues(query(offset: 0))
+            let fresh = page.issues
+            total = page.totalCount
             guard gen == generation else { return }
             issues = fresh
             shownKey = cacheKey
@@ -245,7 +234,7 @@ private struct IssueListPage: View {
 
     var body: some View {
         List(selection: $selection) {
-            if model.stale || (model.kind == .favorites && !model.missingFavorites.isEmpty) {
+            if model.stale || (model.kind == .favorites && !app.settings.favoritesPending.isEmpty) {
                 Section {
                     if model.stale {
                         Button {
@@ -256,9 +245,14 @@ private struct IssueListPage: View {
                         }
                         CaptchaButton { Task { await model.load(app) } }
                     }
-                    if model.kind == .favorites && !model.missingFavorites.isEmpty {
-                        Text("Unavailable (deleted or no access): \(model.missingFavorites.map { "#\($0)" }.joined(separator: ", "))")
-                            .font(.footnote).foregroundStyle(.secondary)
+                    if model.kind == .favorites && !app.settings.favoritesPending.isEmpty {
+                        // избранное прежних версий жило только на устройстве — переносится, как только есть веб-сессия
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Favorites saved on this device (\(app.settings.favoritesPending.count)) will move to the server once you sign in via website.")
+                                .font(.footnote).foregroundStyle(.secondary)
+                            Button("Sign in via website") { app.showWebLogin = true }
+                                .buttonStyle(.bordered).font(.footnote)
+                        }
                     }
                 }
             }
@@ -313,7 +307,7 @@ private struct IssueListPage: View {
             if !Task.isCancelled && (typing || !model.freshLoad) { await model.load(app) }
         }
         .onChange(of: app.listEpoch) { if active { Task { await model.reloadIfStale(app) } } }
-        .onChange(of: app.settings.favorites) { if model.kind == .favorites { Task { await model.load(app) } } }
+        .onChange(of: app.favoritesEpoch) { if model.kind == .favorites { Task { await model.load(app) } } }
         .errorAlert($actionError)
     }
 
@@ -449,7 +443,7 @@ struct IssueMenu: View {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }
             }
-            Button { openURL(url) } label: { Label("Open in Safari", systemImage: "safari") }
+            if !app.isDemo { Button { openURL(url) } label: { Label("Open in Safari", systemImage: "safari") } }
         }
     }
 }

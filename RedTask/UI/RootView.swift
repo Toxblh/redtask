@@ -43,6 +43,25 @@ struct RootView: View {
             }
         }
         .task { await app.refreshUnread() }
+        .alert(Text("Couldn’t change favorites"), isPresented: Binding(get: { app.favoriteError != nil }, set: { if !$0 { app.favoriteError = nil } }),
+               presenting: app.favoriteError) { e in
+            if e.needsWebLogin {
+                Button("Sign in via website") { app.showWebLogin = true }
+                Button("Cancel", role: .cancel) { app.cancelPendingFavorite() }
+            } else {
+                Button("OK", role: .cancel) {}
+            }
+        } message: { e in Text(e.message) }
+        .fullScreenCover(isPresented: Binding(get: { app.showWebLogin }, set: { app.showWebLogin = $0 })) {
+            if let url = app.api?.baseURL {
+                WebLoginView(server: url) { key, agent in
+                    Task { await app.webLoginDone(key: key, agent: agent) }
+                } onCancel: {
+                    app.showWebLogin = false
+                    app.cancelPendingFavorite()
+                }
+            }
+        }
         #if DEBUG
         .onAppear {
             if let t = UserDefaults.standard.string(forKey: "RTTab").flatMap(AppTab.init) { tab = t }

@@ -103,6 +103,8 @@ struct IssueQuery: Sendable, Hashable {
     var parentId: Int?
     var subject: String?
     var issueIds: [Int]?
+    /// Избранное плагина redmine_favourites_issues (фильтр favourite_state).
+    var favorites = false
     var updatedSince: String?
     var sort = "updated_on:desc"
     var limit = 50
@@ -126,10 +128,12 @@ final class RedmineAPI: Sendable {
     static let userAgent = "RedTask/1.0 (iOS)"
     private static let wafRetries = 3
 
-    init(baseURL: URL, apiKey: String) {
+    /// protocolClasses — подмена транспорта (демо-режим отвечает из памяти, в сеть не ходит).
+    init(baseURL: URL, apiKey: String, protocolClasses: [AnyClass] = []) {
         self.baseURL = baseURL
         self.apiKey = apiKey
         let cfg = URLSessionConfiguration.default
+        if !protocolClasses.isEmpty { cfg.protocolClasses = protocolClasses }
         cfg.timeoutIntervalForRequest = 40
         cfg.httpShouldSetCookies = false // куки браузера (капча) кладём сами и только на свой хост
         cfg.httpCookieAcceptPolicy = .never
@@ -334,7 +338,8 @@ final class RedmineAPI: Sendable {
     // MARK: задачи
 
     func issues(_ q: IssueQuery) async throws -> IssuesResponse {
-        try await get("issues.json", [
+        if q.favorites { return try await get("issues.json", favoritesQuery(q)) }
+        return try await get("issues.json", [
             ("limit", String(q.limit)), ("offset", String(q.offset)), ("sort", q.sort), ("status_id", q.statusFilter),
             ("project_id", q.projectId.map(String.init)), ("parent_id", q.parentId.map(String.init)),
             ("assigned_to_id", q.assignedToMe ? "me" : nil), ("watcher_id", q.watchedByMe ? "me" : nil),
@@ -342,6 +347,78 @@ final class RedmineAPI: Sendable {
             ("issue_id", q.issueIds?.map(String.init).joined(separator: ",")),
             ("updated_on", q.updatedSince.map { ">=\($0)" }),
         ])
+    }
+
+    /**
+     Избранное — полной формой фильтра: с f[] сервер не читает короткие status_id/subject, поэтому и они фильтрами.
+     Значение favourite_state сервер не сверяет (любое — «избранные»), берём подпись с сайта.
+     */
+    func favoritesQuery(_ q: IssueQuery) -> [(String, String?)] {
+        var p: [(String, String?)] = [
+            ("set_filter", "1"),
+            ("f[]", "favourite_state"), ("op[favourite_state]", "="), ("v[favourite_state][]", "Избранные задачи"),
+            ("f[]", "status_id"), ("op[status_id]", ["open": "o", "closed": "c"][q.statusFilter] ?? "*"),
+        ]
+        if let s = q.subject { p += [("f[]", "subject"), ("op[subject]", "~"), ("v[subject][]", s)] }
+        return p + [("sort", q.sort), ("limit", String(q.limit)), ("offset", String(q.offset))]
+    }
+
+    /// Все мои избранные задачи (любой статус), по 100 за запрос.
+    func favoriteIds() async throws -> [Int] {
+        var q = IssueQuery(statusFilter: "*", favorites: true, limit: 100)
+        q.sort = "id:desc"
+        var ids: [Int] = []
+        // ponytail: потолок 2000 избранных
+        for _ in 0..<20 {
+            let page = try await issues(q)
+            ids += page.issues.map(\.id)
+            q.offset += page.issues.count
+            if page.issues.isEmpty || q.offset >= page.totalCount { break }
+        }
+        var seen = Set<Int>()
+        return ids.filter { seen.insert($0).inserted }
+    }
+
+    /**
+     Звезда — только веб-сессией (с ключом POST → 403): как rails-ujs на сайте, POST /favourites/fav ставит,
+     DELETE снимает; CSRF — из <meta name="csrf-token"> страницы задачи. Без сессии сервер отвечает 401
+     (или уводит на вход) — WebSessionRequired. Возвращает Set-Cookie ответов: сессия Redmine обновляется.
+     */
+    func setFavorite(_ issueId: Int, _ on: Bool, cookie: String, userAgent: String) async throws -> [HTTPCookie] {
+        func web(_ path: String, _ method: String, _ query: [(String, String?)], _ headers: [String: String], cookie: String) async throws -> (String, HTTPURLResponse) {
+            var r = URLRequest(url: url(path, query))
+            r.httpMethod = method
+            r.setValue(cookie, forHTTPHeaderField: "Cookie")
+            r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+            for (k, v) in headers { r.setValue(v, forHTTPHeaderField: k) }
+            let (data, http) = try await perform(r, session: noRedirectSession)
+            return (String(decoding: data, as: UTF8.self), http)
+        }
+        var cookies: [HTTPCookie] = []
+        func take(_ http: HTTPURLResponse) {
+            let h = http.allHeaderFields.reduce(into: [String: String]()) { d, kv in
+                if let k = kv.key as? String, let v = kv.value as? String { d[k] = v }
+            }
+            cookies += HTTPCookie.cookies(withResponseHeaderFields: h, for: http.url ?? baseURL)
+        }
+        let (page, ph) = try await web("issues/\(issueId)", "GET", [], ["Accept": "text/html"], cookie: cookie)
+        take(ph)
+        // задачи нет или она закрыта от меня — звезду не поставить ни с какой сессией
+        if ph.statusCode == 404 || ph.statusCode == 403 { throw RedmineError(code: ph.statusCode, message: String(localized: "Not found")) }
+        guard ph.statusCode == 200, page.contains("id=\"loggedas\""), let token = csrfToken(page) else { throw WebSessionRequired() }
+        // звезду мог уже поставить/снять другой клиент: нужное состояние — запрос не шлём
+        if pageFavoriteState(page, issueId: issueId) == on { return cookies }
+        let (_, fh) = try await web("favourites/fav", on ? "POST" : "DELETE",
+                                    [("object_id", String(issueId)), ("object_type", "issue")],
+                                    ["X-CSRF-Token": token, "X-Requested-With": "XMLHttpRequest",
+                                     "Accept": "text/javascript, application/javascript"],
+                                    cookie: mergeCookies(cookie, cookies))
+        take(fh)
+        switch fh.statusCode {
+        case 200..<300: return cookies
+        case 401, 302, 422: throw WebSessionRequired()
+        default: throw RedmineError(code: fh.statusCode, message: "HTTP \(fh.statusCode)")
+        }
     }
 
     /// Задачи по id (пачками по 100, в порядке запроса) и id, которых сервер не вернул: удалены или недоступны.
@@ -663,6 +740,36 @@ final class RedmineAPI: Sendable {
         if [403, 404].contains(r.statusCode) { return nil }
         throw RedmineError(code: r.statusCode, message: "avatar: HTTP \(r.statusCode)")
     }
+}
+
+/// Действие есть только на сайте, а входа через сайт (веб-сессии) нет или она истекла.
+struct WebSessionRequired: LocalizedError, Sendable {
+    var errorDescription: String? { String(localized: "Sign in via website to change favorites: the server accepts this only from a web session.") }
+}
+
+/// CSRF-токен Rails со страницы.
+func csrfToken(_ html: String) -> String? {
+    guard let m = try? /<meta\s+name="csrf-token"\s+content="([^"]+)"/.firstMatch(in: html) else { return nil }
+    return String(m.1)
+}
+
+/// Звезда на странице задачи: ссылка плагина с классом icon-favourites-on/off. nil — плагина нет.
+func pageFavoriteState(_ html: String, issueId: Int) -> Bool? {
+    guard let m = try? Regex(#"issue-\#(issueId)-favourite icon icon-favourites-(on|off)"#).firstMatch(in: html),
+          let v = m.output[1].substring else { return nil }
+    return v == "on"
+}
+
+/// Заголовок Cookie с заменой значений, пришедших в Set-Cookie.
+func mergeCookies(_ header: String, _ fresh: [HTTPCookie]) -> String {
+    var pairs: [(String, String)] = header.split(separator: ";").compactMap { p in
+        let kv = p.trimmingCharacters(in: .whitespaces).split(separator: "=", maxSplits: 1)
+        return kv.count == 2 ? (String(kv[0]), String(kv[1])) : nil
+    }
+    for c in fresh {
+        if let i = pairs.firstIndex(where: { $0.0 == c.name }) { pairs[i].1 = c.value } else { pairs.append((c.name, c.value)) }
+    }
+    return pairs.map { "\($0.0)=\($0.1)" }.joined(separator: "; ")
 }
 
 /// Капча на экране: показываем кнопку «Решить капчу», пока последний ответ — проверка WAF.

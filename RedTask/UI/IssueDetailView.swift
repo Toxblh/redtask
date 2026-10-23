@@ -75,6 +75,7 @@ struct IssueDetailView: View {
                 case "edit": sheet = .edit
                 case "time": sheet = .time(nil)
                 case "relation": sheet = .relation
+                case "person": sheet = .person(UserDefaults.standard.integer(forKey: "RTPerson"))
                 default: break
                 }
                 #endif
@@ -84,6 +85,8 @@ struct IssueDetailView: View {
                 // снимки: -RTField <id поля> — прокрутить к длинному настраиваемому полю
                 let field = UserDefaults.standard.integer(forKey: "RTField")
                 if field > 0 { try? await Task.sleep(for: .milliseconds(800)); proxy.scrollTo("cf-\(field)", anchor: .top) }
+                // -RTScroll description — к описанию
+                if let anchor = UserDefaults.standard.string(forKey: "RTScroll") { try? await Task.sleep(for: .milliseconds(800)); proxy.scrollTo(anchor, anchor: .top) }
                 #endif
             }
             .onReceive(NotificationCenter.default.publisher(for: .scrollToNote)) { n in
@@ -151,7 +154,7 @@ struct IssueDetailView: View {
             Section { header(issue) }
             Section { fields(issue) }
             if let d = issue.description, !d.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Section("Description") { RichText(text: d, context: ctx).padding(.vertical, 4) }
+                Section("Description") { RichText(text: d, context: ctx).padding(.vertical, 4) }.id("description")
             }
             subtasks(issue)
             relations(issue)
@@ -584,7 +587,7 @@ struct IssueDetailView: View {
                     ShareLink(item: url, subject: Text(issue.subject), message: Text("#\(issue.id) \(issue.subject)")) {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
-                    Button { openURL(url) } label: { Label("Open in Safari", systemImage: "safari") }
+                    if !app.isDemo { Button { openURL(url) } label: { Label("Open in Safari", systemImage: "safari") } }
                 }
             }
         } label: {

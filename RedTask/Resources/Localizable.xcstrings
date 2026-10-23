@@ -696,6 +696,16 @@
         }
       }
     },
+    "Couldn’t change favorites" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось изменить избранное"
+          }
+        }
+      }
+    },
     "Couldn’t check whether you may change the “private” flag. If not, the server keeps it as it was." : {
       "localizations" : {
         "ru" : {
@@ -858,6 +868,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Удалить запись трудозатрат (%@ ч)?"
+          }
+        }
+      }
+    },
+    "Demo" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Демо"
+          }
+        }
+      }
+    },
+    "Demo mode: made-up data on this device only, nothing is sent anywhere. Changes are lost when the app restarts. Sign out to return to the sign-in screen." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Демо-режим: выдуманные данные только на этом устройстве, ничего никуда не отправляется. Изменения пропадут при перезапуске. «Выйти» вернёт на экран входа."
           }
         }
       }
@@ -1148,6 +1178,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Только избранные"
+          }
+        }
+      }
+    },
+    "Favorites saved on this device (%lld) will move to the server once you sign in via website." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Избранное с этого устройства (%lld) перенесётся на сервер, как только вы войдёте через сайт."
           }
         }
       }
@@ -1802,6 +1842,16 @@
         }
       }
     },
+    "No Redmine server at hand? Explore the app with sample data. Nothing is sent anywhere." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нет под рукой сервера Redmine? Посмотрите приложение на примерах — ничего никуда не отправляется."
+          }
+        }
+      }
+    },
     "No time logged" : {
       "localizations" : {
         "ru" : {
@@ -2302,17 +2352,6 @@
         }
       }
     },
-    "Remove" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Убрать"
-          }
-        }
-      }
-    },
     "Remove %@" : {
       "localizations" : {
         "ru" : {
@@ -2559,6 +2598,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Войти через сайт"
+          }
+        }
+      }
+    },
+    "Sign in via website to change favorites: the server accepts this only from a web session." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Чтобы менять избранное, войдите через сайт: сервер принимает это только от веб-сессии."
           }
         }
       }
@@ -2913,6 +2962,16 @@
         }
       }
     },
+    "Try Demo" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Попробовать без сервера"
+          }
+        }
+      }
+    },
     "Type" : {
       "localizations" : {
         "ru" : {
@@ -2939,16 +2998,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Нет доступа: проверьте API-ключ"
-          }
-        }
-      }
-    },
-    "Unavailable (deleted or no access): %@" : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Недоступны (удалены или нет доступа): %@"
           }
         }
       }
@@ -3129,6 +3178,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "У вас нет права писать приватные заметки: сервер опубликует этот комментарий открыто. Уберите то, что должно остаться приватным, и снимите пометку «Приватная заметка», чтобы отправить."
+          }
+        }
+      }
+    },
+    "You signed in on the website as a different user." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "На сайте вы вошли под другим пользователем."
           }
         }
       }

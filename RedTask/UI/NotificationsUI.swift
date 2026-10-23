@@ -219,6 +219,12 @@ struct SettingsView: View {
         @Bindable var app = app
         NavigationStack {
             Form {
+                if app.isDemo {
+                    Section {
+                        Label("Demo mode: made-up data on this device only, nothing is sent anywhere. Changes are lost when the app restarts. Sign out to return to the sign-in screen.", systemImage: "theatermasks")
+                            .font(.footnote)
+                    } header: { Text("Demo") }
+                }
                 Section("Account") {
                     HStack(spacing: 12) {
                         Avatar(name: app.settings.userName, userId: app.settings.userId, size: 44)
@@ -243,12 +249,12 @@ struct SettingsView: View {
                 }
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
-                    Button("Open Redmine in Safari") { if let u = app.api?.baseURL { openURL(u) } }
+                    if !app.isDemo { Button("Open Redmine in Safari") { if let u = app.api?.baseURL { openURL(u) } } }
                 }
                 Section {
                     Button("Sign Out", role: .destructive) { confirmSignOut = true }
                 } footer: {
-                    Text("Signing out removes the API key from the Keychain and clears cached issues on this device.")
+                    if !app.isDemo { Text("Signing out removes the API key from the Keychain and clears cached issues on this device.") }
                 }
             }
             .navigationTitle("Settings")

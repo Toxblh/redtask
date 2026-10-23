@@ -353,7 +353,7 @@ private struct PersonPage: View {
             } else {
                 ProgressView()
             }
-            if let api = app.api {
+            if let api = app.api, !app.isDemo {
                 Link(destination: api.baseURL.appendingPathComponent("people/\(userId)")) {
                     Label("Open profile in Redmine", systemImage: "safari")
                 }

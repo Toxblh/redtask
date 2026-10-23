@@ -35,7 +35,9 @@ struct PollCollector {
         var out: [Int: Issue] = [:]
         var complete = true
         let favoritesOnly = s.notifFlags.contains(.favoritesOnly)
-        if favoritesOnly && s.favorites.isEmpty { return (out, true) }
+        // избранное — на сервере: набор берём оттуда, а не из кэша настроек
+        let favorites = favoritesOnly ? Set(try await api.favoriteIds()) : []
+        if favoritesOnly && favorites.isEmpty { return (out, true) }
         var queries: [IssueQuery] = []
         if s.notifFlags.contains(.scopeAssigned) { queries.append(IssueQuery(assignedToMe: true)) }
         if s.notifFlags.contains(.scopeWatched) { queries.append(IssueQuery(watchedByMe: true)) }
@@ -56,7 +58,7 @@ struct PollCollector {
             }
             if !done { complete = false }
         }
-        if favoritesOnly { out = out.filter { s.favorites.contains($0.key) } }
+        if favoritesOnly { out = out.filter { favorites.contains($0.key) } }
         return (out, complete)
     }
 
@@ -328,7 +330,7 @@ enum Poller {
 
     static func schedule() {
         let app = AppModel.shared
-        guard app.isLoggedIn, app.settings.notificationsEnabled else {
+        guard app.isLoggedIn, !app.isDemo, app.settings.notificationsEnabled else {
             BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: taskId)
             return
         }
@@ -405,7 +407,8 @@ enum Poller {
      Тап ведёт к самому новому журналу. «Мне» и обсуждение — обычные, остальное — тихие (passive).
      */
     static func post(_ fresh: [NotifEntry]) async {
-        guard !fresh.isEmpty else { return }
+        // демо — только колокольчик, системных уведомлений о выдуманных задачах не шлём
+        guard !fresh.isEmpty, !AppModel.shared.isDemo else { return }
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }

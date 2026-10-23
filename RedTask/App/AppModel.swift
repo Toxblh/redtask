@@ -18,13 +18,30 @@ struct OpenRequest: Equatable {
 final class AppModel {
     static let shared = AppModel()
 
-    var settings: AppSettings { didSet { if settings != oldValue { settings.save() } } }
+    /// Демо-режим: в памяти, на диск настройки не пишутся, после перезапуска — снова экран входа.
+    private(set) var isDemo = false
+    var settings: AppSettings { didSet { if settings != oldValue && !isDemo { settings.save() } } }
     private(set) var api: RedmineAPI?
     private(set) var refs: RefData?
     var unreadCount = 0
     var openRequest: OpenRequest?
     /// Растёт, когда списки могли устареть (сохранили задачу, создали новую): видимый список тихо перезапрашивается.
     var listEpoch = 0
+    /// Растёт, когда избранное на сервере поменялось: список «Избранное» перезапрашивается.
+    var favoritesEpoch = 0
+    /// Ошибка звезды — общий алерт (RootView).
+    var favoriteError: FavoriteError?
+    /// Вход через сайт ради веб-сессии (звезда пишется только ею).
+    var showWebLogin = false
+    private var pendingFavorite: (id: Int, on: Bool)?
+    private var favoriteWrites = 0
+    private var migrating = false
+
+    struct FavoriteError: Identifiable {
+        let id = UUID()
+        var message: String
+        var needsWebLogin: Bool
+    }
 
     private init() {
         settings = AppSettings.load()
@@ -36,6 +53,7 @@ final class AppModel {
             }
         }
         restoreBrowserPass()
+        if isLoggedIn { Task { await refreshFavorites() } }
         #if DEBUG
         debugLaunch()
         #endif
@@ -45,6 +63,7 @@ final class AppModel {
     /// Отладочный запуск из simctl: -RTKey <ключ> [-RTServer url] [-RTIssue id] [-RTNote id].
     private func debugLaunch() {
         let d = UserDefaults.standard
+        if d.bool(forKey: "RTDemo") { enterDemo() } // и поверх входа: снимки без настоящих данных
         if let key = d.string(forKey: "RTKey"), !isLoggedIn {
             let server = d.string(forKey: "RTServer") ?? "https://my.basealt.space"
             Task { try? await login(server: server, key: key) }
@@ -60,7 +79,7 @@ final class AppModel {
     var isLoggedIn: Bool { api != nil }
 
     private func connect(url: URL, key: String) {
-        let api = RedmineAPI(baseURL: url, apiKey: key)
+        let api = RedmineAPI(baseURL: url, apiKey: key, protocolClasses: isDemo ? [DemoServer.self] : [])
         self.api = api
         refs = RefData(api: api, account: settings.accountKey)
     }
@@ -99,6 +118,29 @@ final class AppModel {
         await Poller.requestProvisional()
         Poller.schedule()
         Poller.foreground()
+        await refreshFavorites()
+    }
+
+    /// Демо: выдуманный сервер в памяти (DemoServer), сеть не используется. Выход — «Выйти» в настройках.
+    func enterDemo() {
+        DemoServer.reset()
+        isDemo = true
+        var s = AppSettings(favoritesMigrated: true)
+        s.serverURL = DemoServer.base.absoluteString
+        s.userId = DemoServer.me.id
+        s.userName = DemoServer.me.displayName
+        s.userLogin = DemoServer.me.login
+        s.favorites = DemoServer.favoriteIds
+        settings = s
+        try? FileManager.default.removeItem(at: Files.caches.appendingPathComponent(settings.accountKey))
+        connect(url: DemoServer.base, key: "demo")
+        unreadCount = 0
+        // колокольчик — обычным опросом по демо-данным: свежие события станут непрочитанными
+        Task {
+            await NotifStore.shared.claim("demo")
+            await NotifStore.shared.clear()
+            await Poller.poll()
+        }
     }
 
     /// Выход: ключ, кэши учётки, избранное. Настройки уведомлений остаются — тот же человек не настраивает их заново.
@@ -112,21 +154,113 @@ final class AppModel {
         refs = nil
         MentionStore.shared.clear()
         Task { await ImageStore.shared.clear() }
+        unreadCount = 0
+        pendingFavorite = nil
+        if isDemo {
+            // настройки демо на диск не попадали — возвращаем сохранённые (вышедшие) настройки
+            isDemo = false
+            settings = AppSettings.load()
+            return
+        }
         var s = settings
         s.userId = 0
         s.userName = ""
         s.userLogin = ""
         s.favorites = []
+        s.favoritesPending = []
         s.lastCheck = nil
         settings = s
-        unreadCount = 0
     }
+
+    // MARK: - Избранное (на сервере, плагин redmine_favourites_issues)
 
     func isFavorite(_ id: Int) -> Bool { settings.favorites.contains(id) }
 
+    /// Звезда оптимистично: сразу на экране, запись на сервер фоном; сбой — откат и алерт.
     func toggleFavorite(_ id: Int) {
-        if let i = settings.favorites.firstIndex(of: id) { settings.favorites.remove(at: i) } else { settings.favorites.append(id) }
+        let on = !isFavorite(id)
+        setLocalFavorite(id, on)
+        favoriteWrites += 1
+        Task {
+            defer { favoriteWrites -= 1 }
+            do {
+                try await writeFavorite(id, on)
+                favoritesEpoch += 1
+            } catch {
+                setLocalFavorite(id, !on)
+                let web = error is WebSessionRequired
+                // после входа через сайт повторим — нажатие не теряется
+                if web { pendingFavorite = (id, on) }
+                favoriteError = FavoriteError(message: error.localizedDescription, needsWebLogin: web)
+            }
+        }
     }
+
+    private func setLocalFavorite(_ id: Int, _ on: Bool) {
+        settings.favorites.removeAll { $0 == id }
+        if on { settings.favorites.insert(id, at: 0) }
+    }
+
+    private func writeFavorite(_ id: Int, _ on: Bool) async throws {
+        if isDemo { return DemoServer.setFavorite(id, on) }
+        guard let api, let host = api.baseURL.host else { return }
+        guard let cookie = await Self.cookieHeader(host: host) else { throw WebSessionRequired() }
+        let agent = UserDefaults.standard.string(forKey: "wafAgent") ?? RedmineAPI.userAgent
+        let fresh = try await api.setFavorite(id, on, cookie: cookie, userAgent: agent)
+        // обновлённая сессия — обратно в WebView, иначе она истечёт по таймауту неактивности
+        for c in fresh { await WKWebsiteDataStore.default().httpCookieStore.setCookie(c) }
+        if !fresh.isEmpty { await loadBrowserCookies(agent: agent) }
+    }
+
+    /// Набор с сервера (вход, возврат в приложение, список «Избранное»); затем — перенос старого локального.
+    func refreshFavorites() async {
+        guard let api, favoriteWrites == 0 else { return }
+        guard let ids = try? await api.favoriteIds(), favoriteWrites == 0, api === self.api else { return }
+        if settings.favorites != ids { settings.favorites = ids }
+        await migrateFavorites(server: ids)
+    }
+
+    /// Перенос избранного прежних версий: по одной задаче, пока есть веб-сессия; без неё ждём входа через сайт.
+    private func migrateFavorites(server: [Int]) async {
+        let todo = AppSettings.favoritesToMigrate(pending: settings.favoritesPending, server: Set(server))
+        if todo.isEmpty {
+            if !settings.favoritesPending.isEmpty { settings.favoritesPending = [] }
+            return
+        }
+        guard !migrating else { return }
+        migrating = true
+        defer { migrating = false }
+        var moved = false
+        for id in todo {
+            do {
+                try await writeFavorite(id, true)
+                setLocalFavorite(id, true)
+                moved = true
+            } catch let e as RedmineError where e.code == 403 || e.code == 404 {
+                // задачи нет или нет доступа — переносить нечего
+            } catch { break }
+            settings.favoritesPending.removeAll { $0 == id }
+        }
+        if moved { favoritesEpoch += 1 }
+    }
+
+    /// Вход через сайт для звезды: ключ того же человека — повторяем отложенное нажатие и перенос.
+    func webLoginDone(key: String, agent: String) async {
+        showWebLogin = false
+        await adoptBrowserPass(agent: agent)
+        guard key == Keychain.load(account: settings.account) else {
+            pendingFavorite = nil
+            favoriteError = FavoriteError(message: String(localized: "You signed in on the website as a different user."), needsWebLogin: false)
+            return
+        }
+        if let p = pendingFavorite {
+            pendingFavorite = nil
+            if isFavorite(p.id) != p.on { toggleFavorite(p.id) }
+        }
+        await refreshFavorites()
+    }
+
+    func cancelPendingFavorite() { pendingFavorite = nil }
 
     func open(_ issueId: Int, note: Int? = nil) { openRequest = OpenRequest(issueId: issueId, note: note) }
 
