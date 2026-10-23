@@ -18,6 +18,8 @@ struct PollCollector {
     let api: RedmineAPI
     let refs: RefData
     let s: AppSettings
+    /// Потолок страниц на запрос; бэкфилл берёт одну, как на Android — первое открытие не тянет сотни задач.
+    var pages = Self.maxPages
 
     static let page = 100
     // ponytail: потолок 1000 задач на запрос; упёрлись — набор считается неполным
@@ -45,7 +47,7 @@ struct PollCollector {
             q.limit = Self.page
             q.sort = updatedSince != nil ? "updated_on:desc" : "id:desc"
             var done = false
-            for _ in 0..<Self.maxPages {
+            for _ in 0..<pages {
                 let page = try await api.issues(q)
                 // сервер не знает author_id и вернул всё подряд — отсекаем чужое
                 for i in page.issues where !q.authoredByMe || i.author.id == s.userId { out[i.id] = i }
@@ -66,7 +68,7 @@ struct PollCollector {
         var next = start
         var done = false
         do {
-            for _ in 0..<Self.mentionPages {
+            for _ in 0..<min(pages, Self.mentionPages) {
                 let page = try await api.issuesMentioning(login: login, updatedSince: redmineISO(since), offset: next)
                 page.issues.forEach { out.insert($0.id) }
                 next += page.issues.count
@@ -373,17 +375,29 @@ enum Poller {
         }
     }
 
-    /// Однократный бэкфилл истории за 7 дней — при первом открытии колокольчика; непрочитанным не считается.
+    private static var backfilling = false
+
+    /**
+     Однократный бэкфилл истории за 7 дней — при первом открытии колокольчика; непрочитанным не считается.
+     Своя задача, а не задача экрана: закрыли колокольчик — бэкфилл не отменяется и всё равно допишет историю.
+     Берёт только то, что не новее последнего опроса: более свежее — забота опроса (уведомление + «непрочитано»).
+     */
     static func backfill() async {
-        let app = AppModel.shared
-        guard await NotifStore.shared.needsBackfill(), let api = app.api, let refs = app.refs else { return }
-        let now = Date()
-        do {
-            let (entries, _) = try await PollCollector(api: api, refs: refs, s: app.settings)
-                .collect(since: now.addingTimeInterval(-7 * 86400), now: now, saved: nil)
-            _ = try await NotifStore.shared.appendAll(entries, unread: false)
-            await NotifStore.shared.markBackfilled()
-        } catch {}
+        guard !backfilling else { return }
+        backfilling = true
+        await Task { @MainActor in
+            defer { backfilling = false }
+            let app = AppModel.shared
+            guard await NotifStore.shared.needsBackfill(), let api = app.api, let refs = app.refs else { return }
+            let now = Date()
+            let until = Int64((app.settings.lastCheck ?? now).timeIntervalSince1970 * 1000)
+            do {
+                let (entries, _) = try await PollCollector(api: api, refs: refs, s: app.settings, pages: 1)
+                    .collect(since: now.addingTimeInterval(-7 * 86400), now: now, saved: nil)
+                _ = try await NotifStore.shared.appendAll(entries.filter { $0.at <= until }, unread: false)
+                await NotifStore.shared.markBackfilled()
+            } catch {}
+        }.value
     }
 
     /**
