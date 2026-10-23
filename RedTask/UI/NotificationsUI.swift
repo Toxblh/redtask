@@ -249,6 +249,7 @@ struct SettingsView: View {
                 }
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                    LabeledContent("License", value: "GNU GPL v3+")
                     if !app.isDemo { Button("Open Redmine in Safari") { if let u = app.api?.baseURL { openURL(u) } } }
                 }
                 Section {

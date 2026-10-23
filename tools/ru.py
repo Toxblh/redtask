@@ -271,6 +271,7 @@ RU = {
 "Upload (%lld)": "Загрузить (%lld)",
 "Validation failed": "Сервер не принял данные",
 "Version": "Версия",
+"License": "Лицензия",
 "View": "Вид",
 "View options": "Параметры вида",
 "Watch": "Следить",

@@ -16,3 +16,7 @@ xcodebuild -project RedTask.xcodeproj -scheme RedTask -destination 'generic/plat
 Отладочный вход без UI (только Debug): `xcrun simctl launch <udid> ru.toxblh.RedTask -RTKey <ключ> [-RTServer URL] [-RTIssue id] [-RTTab mine|watched|favorites|projects|search] [-RTSheet bell|settings|new]`.
 
 Правила HIG, применённые в проекте: `docs/HIG-notes.md`.
+
+## Лицензия
+
+GNU GPL v3 или новее (GPL-3.0-or-later), текст — в [LICENSE](LICENSE).

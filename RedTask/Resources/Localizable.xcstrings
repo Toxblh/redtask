@@ -1492,6 +1492,16 @@
         }
       }
     },
+    "License" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Лицензия"
+          }
+        }
+      }
+    },
     "Link" : {
       "localizations" : {
         "ru" : {
