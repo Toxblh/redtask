@@ -145,11 +145,10 @@ private struct BlockView: View {
             }
         case .quote:
             if case .quote(let lines) = block.lines.first {
-                HStack(spacing: 0) {
-                    Rectangle().fill(Color.secondary.opacity(0.6)).frame(width: 3)
-                    BlocksView(blocks: groupBlocks(lines), ctx: ctx, muted: true)
-                        .padding(.vertical, 6).padding(.leading, 10).padding(.trailing, 8)
-                }
+                // полоса — накладкой: высоту задаёт только текст (в HStack List давал пустоту сверху и снизу)
+                BlocksView(blocks: groupBlocks(lines), ctx: ctx, muted: true)
+                    .padding(.vertical, 6).padding(.leading, 13).padding(.trailing, 8)
+                    .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.6)).frame(width: 3) }
                 .background(Color.primary.opacity(0.05))
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             }
