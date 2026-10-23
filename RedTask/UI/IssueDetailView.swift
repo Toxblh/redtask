@@ -754,6 +754,9 @@ struct CommentRow: View {
                 }
             }
             RichText(text: journal.notes ?? "", context: ctx)
+            ForEach(commentAttachments(journal, in: ctx.attachments)) { a in
+                Button { ctx.onOpenAttachment(a) } label: { AttachmentRow(attachment: a) }.buttonStyle(.plain)
+            }
         }
         .padding(.vertical, 4)
         .listRowBackground(highlighted ? Color.accentColor.opacity(0.12) : journal.privateNotes ? Color.orange.opacity(0.06) : nil)

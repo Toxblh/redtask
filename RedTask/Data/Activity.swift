@@ -94,3 +94,11 @@ struct IssuePerms: Equatable, Sendable {
     func editNote(_ j: Journal, me: Int) -> Bool { hasOwn("edit_issue_notes", "edit_own_issue_notes", mine: j.user?.id == me) }
     func editTime(_ e: TimeEntry, me: Int) -> Bool { hasOwn("edit_time_entries", "edit_own_time_entries", mine: e.user?.id == me) }
 }
+
+/// Файлы, приложенные этим комментарием (детали «attachment» с новым значением), как на Android; удалённые из задачи — пропускаем.
+func commentAttachments(_ j: Journal, in all: [Attachment]) -> [Attachment] {
+    j.details.compactMap { d in
+        guard d.property == "attachment", !(d.newValue ?? "").isEmpty, let id = Int(d.name) else { return nil }
+        return all.first { $0.id == id }
+    }
+}

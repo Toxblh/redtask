@@ -196,3 +196,18 @@ struct StatusKindTests {
         #expect(st("Заблокирован").kind == .rejected)
     }
 }
+
+@Suite("Файлы комментария")
+struct CommentFilesTests {
+    @Test func attachmentsOfJournal() {
+        let a: RMAttachment = decode(#"{"id":7,"filename":"a.png"}"#)
+        let b: RMAttachment = decode(#"{"id":9,"filename":"b.pdf"}"#)
+        let j = journal(notes: "см. файлы", details: [
+            detail("attachment", "7", nil, "a.png"),
+            detail("attachment", "8", nil, "deleted.txt"), // удалён из задачи
+            detail("attachment", "9", "b.pdf", nil),       // удаление файла, а не добавление
+            detail("attr", "status_id", "1", "2"),
+        ])
+        #expect(commentAttachments(j, in: [a, b]).map(\.id) == [7])
+    }
+}
