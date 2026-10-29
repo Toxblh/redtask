@@ -48,7 +48,8 @@ struct TextileEditor: View {
                     // ширину — явно: в строке формы редактор иначе сжимается до ширины пары букв
                     .frame(maxWidth: .infinity, minHeight: fills ? nil : 160, maxHeight: fills ? .infinity : nil)
                     .padding(.horizontal, fills ? 12 : 0)
-                    .onAppear { if fills { focused = true } }
+                    // курсор в конце: цитата дописана к черновику — продолжаем после неё
+                    .onAppear { if fills { focused = true; setCursor(text.count..<text.count) } }
                     .overlay(alignment: .topLeading) {
                         if text.isEmpty {
                             Text(placeholder).foregroundStyle(.tertiary).padding(.top, 8).padding(.leading, 5).allowsHitTesting(false)

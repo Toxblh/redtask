@@ -64,6 +64,9 @@ private struct DemoDB {
     var trackers: [Tracker] = []
     var activities: [TimeEntryActivity] = []
     var versions: [Int: [Version]] = [:]
+    /// Вики: проект → страницы (имя → родитель, текст).
+    var wiki: [Int: [(title: String, parent: String?, text: String)]] = [:]
+    var projectFiles: [Int: [Attachment]] = [:]
     var issues: [Int: Issue] = [:]
     var relations: [Relation] = []
     var time: [TimeEntry] = []
@@ -87,6 +90,15 @@ private struct DemoDB {
     func priority(_ id: Int) -> Named { Named(id: id, name: priorities.first { $0.id == id }?.name ?? "") }
     func tracker(_ id: Int) -> Named { Named(id: id, name: trackers.first { $0.id == id }?.name ?? "") }
     func project(_ id: Int) -> Named { Named(id: id, name: projects.first { $0.id == id }?.name ?? "") }
+    func role(_ person: Int) -> [String: Any] {
+        switch person {
+        case 2, 8: ["id": 1, "name": t("Manager", "Менеджер")]
+        case 4: ["id": 4, "name": t("Designer", "Дизайнер")]
+        case 5: ["id": 5, "name": t("Tester", "Тестировщик")]
+        case 6: ["id": 6, "name": t("Support", "Поддержка")]
+        default: ["id": 3, "name": t("Developer", "Разработчик")]
+        }
+    }
 
     // MARK: маршруты
 
@@ -122,8 +134,23 @@ private struct DemoDB {
             case "versions.json": return ok("versions", versions[pr.id] ?? [])
             case "issue_categories.json": return raw(["issue_categories": []])
             case "memberships.json":
-                let ms: [[String: Any]] = people.map { ["id": $0.id, "user": ["id": $0.id, "name": $0.shortName], "roles": [["id": 3, "name": "Developer"]]] }
+                let ms: [[String: Any]] = people.map { ["id": $0.id, "user": ["id": $0.id, "name": $0.shortName], "roles": [role($0.id)]] }
                 return raw(["memberships": ms, "total_count": ms.count])
+            case "files.json": return ok("files", projectFiles[pr.id] ?? [])
+            case "wiki":
+                guard let pages = wiki[pr.id] else { return (403, "application/json", Data(#"{"errors":[]}"#.utf8)) }
+                let name = parts.count > 3 ? parts[3].replacingOccurrences(of: ".json", with: "") : ""
+                if name == "index" {
+                    let list: [[String: Any]] = pages.map { p in
+                        var d: [String: Any] = ["title": p.title, "version": 1, "created_on": iso(9000), "updated_on": iso(600)]
+                        if let parent = p.parent { d["parent"] = ["title": parent] }
+                        return d
+                    }
+                    return raw(["wiki_pages": list])
+                }
+                guard let p = pages.first(where: { $0.title == name }) else { return notFound }
+                return raw(["wiki_page": ["title": p.title, "text": p.text, "version": 3, "author": ["id": 8, "name": person(8).shortName],
+                                          "created_on": iso(9000), "updated_on": iso(600), "attachments": []] as [String: Any]])
             case "": return ok(ProjectResponse(project: pr))
             default: return notFound
             }
@@ -272,6 +299,7 @@ private struct DemoDB {
         else if let n = Int(st) { all = all.filter { $0.status.id == n } }
         if let s = p("project_id"), let pr = projects.first(where: { String($0.id) == s || $0.identifier == s }) { all = all.filter { $0.project.id == pr.id } }
         if let s = p("parent_id").flatMap(Int.init) { all = all.filter { $0.parent?.id == s } }
+        if let s = p("fixed_version_id").flatMap(Int.init) { all = all.filter { $0.fixedVersion?.id == s } }
         if p("assigned_to_id") == "me" { all = all.filter { $0.assignedTo?.id == Self.meId } }
         if p("author_id") == "me" { all = all.filter { $0.author.id == Self.meId } }
         if p("watcher_id") == "me" { all = all.filter { $0.watchers.contains { $0.id == Self.meId } } }
@@ -473,8 +501,23 @@ private extension DemoDB {
         projects = [(1, t("Mobile App", "Мобильное приложение"), "mobile"), (2, t("Website", "Сайт"), "website"),
                     (3, t("Infrastructure", "Инфраструктура"), "infra"), (4, t("Customer Support", "Поддержка клиентов"), "support")]
             .map { var p = Project(id: $0.0, name: $0.1); p.identifier = $0.2; p.trackers = trackers; return p }
-        versions = [1: [decode(["id": 31, "name": "1.4", "status": "closed"]), decode(["id": 32, "name": "1.5", "status": "open", "due_date": day(12)])],
-                    2: [decode(["id": 33, "name": t("Spring release", "Весенний релиз"), "status": "open"])]]
+        let modules: [Int: [String]] = [1: ["issue_tracking", "wiki", "files"], 2: ["issue_tracking", "wiki"], 3: ["issue_tracking", "files"], 4: ["issue_tracking"]]
+        for k in projects.indices {
+            projects[k].enabledModules = (modules[projects[k].id] ?? []).enumerated().map { Named(id: $0.offset + 1, name: $0.element) }
+        }
+        projects[0].description = t("The iPhone and iPad app. Release notes and the team guide are in the *Wiki*.",
+                                    "Приложение для iPhone и iPad. Заметки к выпускам и правила команды — в *Вики*.")
+        projects[0].homepage = "https://redmine.example.com/mobile"
+        projects[1].description = t("Marketing site and checkout.", "Сайт и оформление заказа.")
+        func version(_ id: Int, _ project: Int, _ name: String, _ status: String, due: Int?, _ desc: String) -> Version {
+            var v: Version = decode(["id": id, "name": name, "status": status, "description": desc, "project": ["id": project, "name": self.project(project).name]])
+            v.dueDate = due.map { day($0) }
+            return v
+        }
+        versions = [1: [version(31, 1, "1.4", "closed", due: -20, t("Sharing and context menus", "Общий доступ и контекстные меню")),
+                        version(32, 1, "1.5", "open", due: 12, t("Offline mode and crash fixes", "Офлайн-режим и исправления падений")),
+                        version(34, 1, "1.6", "open", due: nil, t("Widgets", "Виджеты"))],
+                    2: [version(33, 2, t("Spring release", "Весенний релиз"), "locked", due: 20, t("New pricing page", "Новая страница тарифов"))]]
 
         let me = 1
         //   id, проект, трекер, статус, приоритет, автор, исполнитель, тема, срок (дни от сегодня), готовность, изменена (мин назад), создана (дни назад)
@@ -501,7 +544,7 @@ private extension DemoDB {
         add(1220, 1, 3, 2, 2, 2, 5, t("Regression test plan for release 1.5", "План регрессионного тестирования релиза 1.5"), due: 4, done: 35, upd: 600, cre: 6, watch: [me], ver: 32)
         add(1217, 3, 1, 6, 1, 7, 7, t("Disk alert fires on empty volumes", "Ложные алерты о диске на пустых томах"), done: 0, upd: 7000, cre: 16)
         add(1214, 4, 4, 5, 2, 6, 6, t("Customer asks for a dark theme", "Клиент просит тёмную тему"), done: 100, upd: 9000, cre: 25)
-        add(1210, 1, 2, 1, 2, 4, nil, t("Widgets for the Home Screen", "Виджеты для экрана «Домой»"), done: 0, upd: 3000, cre: 13, watch: [me, 4])
+        add(1210, 1, 2, 1, 2, 4, nil, t("Widgets for the Home Screen", "Виджеты для экрана «Домой»"), done: 0, upd: 3000, cre: 13, watch: [me, 4], ver: 34)
         add(1208, 2, 1, 2, 3, 5, 3, t("Search results ignore diacritics", "Поиск не находит слова с «ё»"), done: 40, upd: 900, cre: 8)
         add(1205, 3, 3, 1, 1, me, 7, t("Clean up old Docker images", "Почистить старые Docker-образы"), done: 0, upd: 2400, cre: 10)
         favorites = [1240, 1238, 1242]
@@ -522,6 +565,7 @@ private extension DemoDB {
         let shot = attach(501, Upload(filename: "crash-screenshot.png", type: "image/png", data: Self.picture(symbol: "exclamationmark.triangle.fill", tint: .systemRed)), by: 3, ago: 180)
         let log = attach(502, Upload(filename: "crash.log", type: "text/plain", data: Data("Thread 0 Crashed:\n0 RedTask NotificationRouter.open(_:) + 132\n".utf8)), by: 3, ago: 180)
         issues[1240]?.attachments = [shot, log]
+        // комментарий с картинкой — превью в уведомлении и в колокольчике
         let mock = attach(503, Upload(filename: "pricing-mockup.png", type: "image/png", data: Self.picture(symbol: "rectangle.3.group.fill", tint: .systemIndigo)), by: 4, ago: 55)
         issues[1242]?.attachments = [mock]
 
@@ -529,7 +573,7 @@ private extension DemoDB {
         note(1240, me, 1500, t("Looks like the deep link handler runs before the scene is ready. The offline cache from #1238 makes it more likely.",
                                "Похоже, обработчик ссылки срабатывает раньше, чем готова сцена. Офлайн-кэш из #1238 делает это вероятнее."))
         note(1240, 3, 180, t("\(at(me)) the crash log from TestFlight is attached, the stack points to @NotificationRouter.open(_:)@.",
-                             "\(at(me)) приложил крэш-лог из TestFlight, стек указывает на @NotificationRouter.open(_:)@."), [("done_ratio", "30", "60")])
+                             "\(at(me)) приложил крэш-лог из TestFlight, стек указывает на @NotificationRouter.open(_:)@."), [("done_ratio", "30", "60")], files: [shot, log])
         note(1240, 2, 12, t("Let’s ship the fix in 1.5. Please add a regression test — \(at(5)) will verify it on devices.",
                             "Выпускаем исправление в 1.5. Добавь, пожалуйста, регрессионный тест — \(at(5)) проверит на устройствах."), [("priority_id", "3", "4")])
         note(1238, 8, 2000, t("Agreed on the scope with the team, see the table in the description.", "Согласовали объём с командой, таблица — в описании."))
@@ -539,7 +583,50 @@ private extension DemoDB {
                             "Сегодня ещё два клиента написали. \(at(me)), посмотришь в первую очередь?"))
         note(1243, 3, 30, t("\(at(me)) please check the iOS build job after the move — it uses the macOS runners.",
                             "\(at(me)), проверь, пожалуйста, сборку iOS после переезда — она на macOS-раннерах."))
-        note(1242, 4, 55, t("New mockups are attached. Feedback welcome!", "Приложила новые макеты. Жду замечаний!"))
+        note(1242, 4, 55, t("New mockups are attached. Feedback welcome!", "Приложила новые макеты. Жду замечаний!"), files: [mock])
+
+        projectFiles[1] = [attach(601, Upload(filename: "app-icon.png", type: "image/png", data: Self.picture(symbol: "app.badge.fill", tint: .systemBlue)), by: 4, ago: 20000),
+                           attach(602, Upload(filename: t("release-checklist.txt", "чеклист-выпуска.txt"), type: "text/plain",
+                                              data: Data(t("1. Bump the version\n2. TestFlight\n3. Submit for review\n", "1. Поднять версию\n2. TestFlight\n3. Отправить на проверку\n").utf8)), by: 8, ago: 9000)]
+        projectFiles[3] = [attach(603, Upload(filename: "network-diagram.png", type: "image/png", data: Self.picture(symbol: "network", tint: .systemTeal)), by: 7, ago: 30000)]
+        let release = t("Release_process", "Выпуск_версии"), style = t("Code_style", "Стиль_кода"), r15 = t("Release_1.5", "Выпуск_1.5")
+        wiki[1] = [
+            ("Wiki", nil, t("""
+            h1. Mobile App
+
+            Start here. The team works in two-week iterations, see [[\(release)|how we ship]] and [[\(style)]].
+
+            * Current version: [[\(r15)]]
+            * Open bugs: #1240, #1236
+            """, """
+            h1. Мобильное приложение
+
+            Начните отсюда. Команда работает двухнедельными итерациями: [[\(release)|как мы выпускаем]] и [[\(style)]].
+
+            * Текущая версия: [[\(r15)]]
+            * Открытые ошибки: #1240, #1236
+            """)),
+            (release, "Wiki", t("""
+            h2. Release process
+
+            # Freeze the branch on Monday
+            # QA pass — \(at(5))
+            # Submit to App Review
+
+            bq. Never ship on Friday.
+            """, """
+            h2. Выпуск версии
+
+            # Заморозка ветки в понедельник
+            # Проверка — \(at(5))
+            # Отправка в App Review
+
+            bq. В пятницу не выпускаем.
+            """)),
+            (r15, release, t("Offline mode and crash fixes. Back to [[Wiki]].", "Офлайн-режим и исправления падений. Назад — [[Wiki]].")),
+            (style, "Wiki", t("Swift 6, strict concurrency, *small diffs*.", "Swift 6, строгая конкурентность, *маленькие диффы*.")),
+        ]
+        wiki[2] = [("Wiki", nil, t("h1. Website\n\nSee also the [[mobile:Wiki|Mobile App wiki]].", "h1. Сайт\n\nСм. также [[mobile:Wiki|вики мобильного приложения]]."))]
         note(1236, 6, 400, t("The customer confirmed it on iPhone 15 Pro, iOS 18.3.", "Клиент подтвердил на iPhone 15 Pro, iOS 18.3."))
         note(1236, me, 125, t("Fixed in build 1.5 (512), please check.", "Исправлено в сборке 1.5 (512), проверьте, пожалуйста."), [("status_id", "2", "3"), ("done_ratio", "50", "80")])
         note(1225, 7, 1440, t("Staging is done, production is scheduled for Monday.", "Стенд готов, прод — в понедельник."))
@@ -584,9 +671,10 @@ private extension DemoDB {
         issues[id] = i
     }
 
-    mutating func note(_ id: Int, _ user: Int, _ ago: Double, _ text: String, _ details: [(String, String, String)] = []) {
+    mutating func note(_ id: Int, _ user: Int, _ ago: Double, _ text: String, _ details: [(String, String, String)] = [], files: [Attachment] = []) {
         var j: Journal = decode(["id": newId(), "user": ["id": user, "name": person(user).shortName], "notes": text, "created_on": iso(ago)])
         j.details = details.map { jd("attr", name: $0.0, oldValue: $0.1, newValue: $0.2) }
+            + files.map { jd("attachment", name: String($0.id), newValue: $0.filename) }
         issues[id]?.journals.append(j)
         issues[id]?.journals.sort { $0.createdOn < $1.createdOn }
     }

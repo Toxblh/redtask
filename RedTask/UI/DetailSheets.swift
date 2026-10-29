@@ -369,3 +369,60 @@ private struct PersonPage: View {
         }
     }
 }
+
+/**
+ Выделение текста комментария или описания (1.3): текст как на экране, без разметки. В системном меню
+ выделения рядом с «Скопировать» — «Ответить с цитатой». SwiftUI .textSelection не отдаёт выделенное,
+ а долгое нажатие на строку занято контекстным меню, поэтому выделение — в своём листе (UITextView).
+ */
+struct SelectTextSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let text: String
+    /// false — нет права add_issue_notes, только системные пункты.
+    var canQuote = true
+    var onQuote: @MainActor (String) -> Void
+
+    var body: some View {
+        NavigationStack {
+            SelectableText(text: text, onQuote: canQuote ? onQuote : nil)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle("Select text")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { SheetConfirmButton("Done") { dismiss() } } }
+        }
+    }
+}
+
+private struct SelectableText: UIViewRepresentable {
+    let text: String
+    var onQuote: (@MainActor (String) -> Void)?
+
+    func makeUIView(context: Context) -> UITextView {
+        let v = UITextView()
+        v.isEditable = false
+        v.font = .preferredFont(forTextStyle: .body)
+        v.adjustsFontForContentSizeCategory = true
+        v.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 16, right: 12)
+        v.backgroundColor = .clear
+        v.text = text
+        v.delegate = context.coordinator
+        return v
+    }
+
+    func updateUIView(_ v: UITextView, context: Context) { context.coordinator.onQuote = onQuote }
+    func makeCoordinator() -> Coordinator { Coordinator(onQuote: onQuote) }
+
+    @MainActor final class Coordinator: NSObject, UITextViewDelegate {
+        var onQuote: (@MainActor (String) -> Void)?
+        init(onQuote: (@MainActor (String) -> Void)?) { self.onQuote = onQuote }
+
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            guard let onQuote, range.length > 0 else { return nil }
+            let selected = (textView.text as NSString).substring(with: range)
+            let quote = UIAction(title: String(localized: "Reply with quote"), image: UIImage(systemName: "arrowshape.turn.up.left")) { _ in
+                onQuote(selected)
+            }
+            return UIMenu(children: [quote] + suggestedActions)
+        }
+    }
+}

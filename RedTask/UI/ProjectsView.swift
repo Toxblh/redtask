@@ -17,22 +17,14 @@ struct ProjectsView: View {
 
     var body: some View {
         Group {
-            List(shown, selection: $selection) { p in
-                NavigationLink(value: p) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(p.name).font(.body)
-                        if let parent = p.parent?.name, !parent.isEmpty {
-                            Text(parent).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .contextMenu {
-                    Button { copyToPasteboard(p.identifier) } label: { Label("Copy identifier", systemImage: "doc.on.doc") }
-                    if let api = app.api, !app.isDemo {
-                        Link(destination: api.baseURL.appendingPathComponent("projects/\(p.identifier)")) {
-                            Label("Open in Safari", systemImage: "safari")
-                        }
-                    }
+            List(selection: $selection) {
+                // избранные — секцией сверху (только при пустом фильтре), общий список не меняется
+                let pinned = query.isEmpty ? pinnedProjects(projects, pins: app.projectPins) : []
+                if pinned.isEmpty {
+                    ForEach(shown) { row($0) }
+                } else {
+                    Section("Pinned") { ForEach(pinned) { row($0) } }
+                    Section("All projects") { ForEach(shown) { row($0) } }
                 }
             }
             .listStyle(.plain)
@@ -49,6 +41,41 @@ struct ProjectsView: View {
                 }
             }
             .task { if projects.isEmpty { await load(force: false) } }
+        }
+    }
+
+    private func row(_ p: Project) -> some View {
+        let pinned = app.isPinned(p.id)
+        return NavigationLink(value: p) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(p.name).font(.body)
+                    if let parent = p.parent?.name, !parent.isEmpty {
+                        Text(parent).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if pinned {
+                    Spacer()
+                    Image(systemName: "star.fill").foregroundStyle(.yellow).accessibilityLabel("Pinned")
+                }
+            }
+        }
+        .swipeActions(edge: .leading) {
+            Button { app.togglePin(p.id) } label: {
+                Label(pinned ? "Unpin" : "Pin", systemImage: pinned ? "star.slash.fill" : "star.fill")
+            }
+            .tint(.orange)
+        }
+        .contextMenu {
+            Button { app.togglePin(p.id) } label: {
+                Label(pinned ? "Remove from Pinned" : "Add to Pinned", systemImage: pinned ? "star.slash" : "star")
+            }
+            Button { copyToPasteboard(p.identifier) } label: { Label("Copy identifier", systemImage: "doc.on.doc") }
+            if let api = app.api, !app.isDemo {
+                Link(destination: api.baseURL.appendingPathComponent("projects/\(p.identifier)")) {
+                    Label("Open in Safari", systemImage: "safari")
+                }
+            }
         }
     }
 

@@ -7,7 +7,20 @@ enum AppTab: String, Hashable, CaseIterable {
 /// Переход к задаче из детали (подзадачи, связи, #ссылки) — в стек колонки детали.
 struct IssueLink: Hashable {
     var id: Int
-    var note: Int?
+    /// «note-N» или «change-ID»
+    var fragment: String?
+}
+
+/// Страница вики: проект (id или идентификатор) и имя страницы.
+struct WikiRef: Hashable {
+    var project: String
+    var title: String
+}
+
+/// Раздел проекта в колонке детали: веха (доска/список) или страница вики.
+enum ProjectPage: Hashable {
+    case version(Version)
+    case wiki(WikiRef)
 }
 
 /// iPhone — таб-бар, iPad — таб-бар, превращаемый в сайдбар; внутри раздела — split view «список ↔ задача».
@@ -87,8 +100,9 @@ struct RootView: View {
         /// На iPhone переход из уведомления/ссылки показывает сразу задачу, минуя список.
         @State private var compactColumn = NavigationSplitViewColumn.sidebar
         @State private var selection: Int?
-        @State private var note: Int?
-        @State private var path: [IssueLink] = []
+        @State private var page: ProjectPage?
+        @State private var fragment: String?
+        @State private var path = NavigationPath()
         @SceneStorage("tab") private var current: AppTab = .mine
 
         var body: some View {
@@ -100,7 +114,7 @@ struct RootView: View {
                             .toolbar(removing: .sidebarToggle)
                     } content: {
                         if let p = project {
-                            IssueListView(kind: .project(p.id, p.name), selection: $selection).id(p.id)
+                            ProjectView(project: p, selection: $selection, page: $page).id(p.id)
                         } else {
                             ContentUnavailableView("Select a project", systemImage: "folder")
                         }
@@ -115,9 +129,17 @@ struct RootView: View {
                 }
             }
             .onChange(of: selection) { _, new in
-                if new != pendingNoteIssue { note = nil }
-                path = []
+                if new != pendingNoteIssue { fragment = nil }
+                if new != nil { page = nil }
+                path = NavigationPath()
             }
+            .onChange(of: page) { _, new in
+                guard new != nil else { return }
+                selection = nil
+                path = NavigationPath()
+                compactColumn = .detail
+            }
+            .onChange(of: project) { page = nil }
             .onChange(of: app.openRequest) { _, r in handle(r) }
             .onAppear { handle(app.openRequest) }
         }
@@ -126,16 +148,24 @@ struct RootView: View {
 
         private var detail: some View {
             NavigationStack(path: $path) {
-                if let id = selection {
-                    IssueDetailView(issueId: id, note: note, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
-                        .id(id)
-                        .navigationDestination(for: IssueLink.self) { l in
-                            IssueDetailView(issueId: l.id, note: l.note, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
+                Group {
+                    switch page {
+                    case .version(let v): VersionView(version: v).id(v.id)
+                    case .wiki(let w): WikiPageView(ref: w).id(w)
+                    case nil:
+                        if let id = selection {
+                            IssueDetailView(issueId: id, fragment: fragment, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
+                                .id(id)
+                        } else {
+                            ContentUnavailableView("Select an issue", systemImage: "checklist")
                         }
-                        .environment(\.navigate, NavigateAction { path.append($0) })
-                } else {
-                    ContentUnavailableView("Select an issue", systemImage: "checklist")
+                    }
                 }
+                .navigationDestination(for: IssueLink.self) { l in
+                    IssueDetailView(issueId: l.id, fragment: l.fragment, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
+                }
+                .navigationDestination(for: WikiRef.self) { WikiPageView(ref: $0) }
+                .environment(\.navigate, NavigateAction { path.append($0) })
             }
         }
 
@@ -143,10 +173,10 @@ struct RootView: View {
             guard let r, current == tab else { return }
             app.openRequest = nil
             pendingNoteIssue = r.issueId
-            note = r.note
+            fragment = r.fragment
             if selection == r.issueId {
                 // задача уже открыта: переход к комментарию без пересоздания экрана (черновик цел)
-                NotificationCenter.default.post(name: .scrollToNote, object: nil, userInfo: ["issue": r.issueId, "note": r.note ?? 0])
+                NotificationCenter.default.post(name: .scrollToNote, object: nil, userInfo: ["issue": r.issueId, "fragment": r.fragment ?? ""])
             } else {
                 selection = r.issueId
             }

@@ -90,7 +90,7 @@ struct NotificationsView: View {
 
     private func open(_ issueId: Int, _ note: Int?) {
         dismiss()
-        app.open(issueId, note: note)
+        app.open(issueId, fragment: note.map { "change-\($0)" })
     }
 
     @ViewBuilder

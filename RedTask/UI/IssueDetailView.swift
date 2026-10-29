@@ -18,9 +18,12 @@ enum ActivityTab: String, CaseIterable, Identifiable {
 
 enum DetailSheet: Identifiable {
     case comment, time(TimeEntry?), relation, edit, person(Int), upload([PickedFile])
+    /// Выделение текста комментария (journal) или описания (nil) для частичной цитаты.
+    case select(String, Journal?)
     var id: String {
         switch self {
         case .comment: "comment"
+        case .select(_, let j): "select-\(j?.id ?? 0)"
         case .time(let e): "time-\(e?.id ?? 0)"
         case .relation: "relation"
         case .edit: "edit"
@@ -35,7 +38,7 @@ struct IssueDetailView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var hSize
     let issueId: Int
-    var note: Int?
+    var fragment: String?
     var newSubtask: (Issue) -> Void = { _ in }
 
     @State private var model: IssueDetailModel
@@ -47,9 +50,9 @@ struct IssueDetailView: View {
     @State private var highlighted: Int?
     @State private var webFallback: URL?
 
-    init(issueId: Int, note: Int? = nil, newSubtask: @escaping (Issue) -> Void = { _ in }) {
+    init(issueId: Int, fragment: String? = nil, newSubtask: @escaping (Issue) -> Void = { _ in }) {
         self.issueId = issueId
-        self.note = note
+        self.fragment = fragment
         self.newSubtask = newSubtask
         _model = State(initialValue: IssueDetailModel(issueId: issueId))
     }
@@ -80,7 +83,7 @@ struct IssueDetailView: View {
                 }
                 #endif
                 await model.load(app)
-                if let note { scroll(to: note, proxy) }
+                if let fragment { scroll(to: fragment, proxy) }
                 #if DEBUG
                 // снимки: -RTField <id поля> — прокрутить к длинному настраиваемому полю
                 let field = UserDefaults.standard.integer(forKey: "RTField")
@@ -94,7 +97,7 @@ struct IssueDetailView: View {
                 // уведомление по уже открытой задаче: ждём ответа сервера, запрошенного после перехода
                 Task {
                     await model.load(app)
-                    if let j = n.userInfo?["note"] as? Int, j > 0 { scroll(to: j, proxy) }
+                    if let f = n.userInfo?["fragment"] as? String, !f.isEmpty { scroll(to: f, proxy) }
                 }
             }
         }
@@ -125,9 +128,10 @@ struct IssueDetailView: View {
         .sheet(item: $webFallback) { url in SafariView(url: url).ignoresSafeArea() }
     }
 
-    private func scroll(to journal: Int, _ proxy: ScrollViewProxy) {
-        guard model.issue?.journals.contains(where: { $0.id == journal }) == true else { return }
-        let j = model.issue!.journals.first { $0.id == journal }!
+    /// Фрагмент «note-N» / «change-ID» → журнал (journalForFragment), прокрутка и подсветка.
+    private func scroll(to fragment: String, _ proxy: ScrollViewProxy) {
+        guard let js = model.issue?.journals, let journal = journalForFragment(js.map(\.id), fragment),
+              let j = js.first(where: { $0.id == journal }) else { return }
         tab = (j.notes ?? "").isEmpty ? .all : (tab == .actions || tab == .time ? .comments : tab)
         highlighted = journal
         Task {
@@ -154,7 +158,10 @@ struct IssueDetailView: View {
             Section { header(issue) }
             Section { fields(issue) }
             if let d = issue.description, !d.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                Section("Description") { RichText(text: d, context: ctx).padding(.vertical, 4) }.id("description")
+                Section("Description") {
+                    RichText(text: d, context: ctx).padding(.vertical, 4)
+                        .contextMenu { selectButton(d, nil) }
+                }.id("description")
             }
             subtasks(issue)
             relations(issue)
@@ -498,10 +505,15 @@ struct IssueDetailView: View {
         }
     }
 
+    /// Порядок пунктов — по спецификации (1.2), одинаковый на всех платформах.
     @ViewBuilder
     private func commentMenu(_ j: Journal, issue: Issue, me: Int) -> some View {
         if model.perms.has("add_issue_notes") {
             Button { reply(j) } label: { Label("Reply with quote", systemImage: "arrowshape.turn.up.left") }
+        }
+        Button { copyToPasteboard(j.notes ?? "") } label: { Label("Copy text", systemImage: "doc.on.doc") }
+        if let api = app.api, let url = noteUrl(server: api.baseURL, issue: issue.id, journals: issue.journals.map(\.id), journalId: j.id) {
+            Button { copyToPasteboard(url.absoluteString) } label: { Label("Copy link to comment", systemImage: "link") }
         }
         if model.perms.editNote(j, me: me) && !model.notesRefused.contains(j.id) {
             Button {
@@ -509,16 +521,18 @@ struct IssueDetailView: View {
                 sheet = .comment
             } label: { Label("Edit comment", systemImage: "pencil") }
         }
-        Button { copyToPasteboard(j.notes ?? "") } label: { Label("Copy text", systemImage: "doc.on.doc") }
-        if let api = app.api, let n = issue.journals.firstIndex(of: j) {
-            Button {
-                copyToPasteboard(api.issueWebURL(issue.id).absoluteString + "#note-\(n + 1)")
-            } label: { Label("Copy link to comment", systemImage: "link") }
-        }
         if model.perms.editNote(j, me: me) && !model.notesRefused.contains(j.id) {
             Button(role: .destructive) {
                 confirmDelete = ConfirmDelete(title: String(localized: "Delete this comment?")) { await model.saveNote(j, text: "", isPrivate: nil, app) }
             } label: { Label("Delete", systemImage: "trash") }
+        }
+        Section { selectButton(j.notes ?? "", j) }
+    }
+
+    /// Частичная цитата: текст открывается в выделяемом виде, в меню выделения — «Ответить с цитатой».
+    private func selectButton(_ text: String, _ j: Journal?) -> some View {
+        Button { sheet = .select(plainText(text, mentions: MentionStore.shared.known), j) } label: {
+            Label("Select text", systemImage: "selection.pin.in.out")
         }
     }
 
@@ -606,6 +620,11 @@ struct IssueDetailView: View {
         case .edit: if let i = model.issue { EditIssueView(issue: i, perms: model.perms) { Task { app.listEpoch += 1; await model.load(app) } } }
         case .person(let id): PersonCard(userId: id)
         case .upload(let files): UploadSheet(model: model, files: files)
+        case .select(let text, let j):
+            SelectTextSheet(text: text, canQuote: model.perms.has("add_issue_notes")) { sel in
+                if let j { model.reply(to: j, text: sel) } else { model.quoteDescription(sel) }
+                sheet = .comment
+            }
         }
     }
 
@@ -616,47 +635,52 @@ struct IssueDetailView: View {
             // ссылка на задачу этого сервера — открываем в приложении
             if let base = app.api?.baseURL, url.host == base.host, url.path.contains("/issues/"),
                let id = Int(url.lastPathComponent) {
-                navigate(IssueLink(id: id, note: url.fragment.flatMap { $0.hasPrefix("note-") ? Int($0.dropFirst(5)) : nil }))
+                open(id, fragment: url.fragment)
                 return .handled
             }
             return .systemAction
         }
         switch target {
         case .issue(let id, let note):
-            if id == issueId, let note, let j = journal(number: note) { NotificationCenter.default.post(name: .scrollToNote, object: nil, userInfo: ["issue": id, "note": j]) }
-            else { navigate(IssueLink(id: id)) }
+            open(id, fragment: note.map { "note-\($0)" })
         case .note(let n):
-            if let j = journal(number: n) { NotificationCenter.default.post(name: .scrollToNote, object: nil, userInfo: ["issue": issueId, "note": j]) }
+            open(issueId, fragment: "note-\(n)")
         case .user(let id):
             sheet = .person(id)
+        case .wiki(let project, let title):
+            navigate(WikiRef(project: project ?? String(model.issue?.project.id ?? 0), title: title))
         }
         return .handled
     }
 
-    /// «#note-N» — N-й журнал задачи (как на сайте).
-    private func journal(number n: Int) -> Int? {
-        guard let js = model.issue?.journals, n >= 1, n <= js.count else { return nil }
-        return js[n - 1].id
+    /// Эта же задача — прокрутка к журналу; другая — переход сразу к журналу (#123#note-5).
+    private func open(_ id: Int, fragment: String?) {
+        if id == issueId {
+            if let fragment { NotificationCenter.default.post(name: .scrollToNote, object: nil, userInfo: ["issue": id, "fragment": fragment]) }
+        } else {
+            navigate(IssueLink(id: id, fragment: fragment))
+        }
     }
 
     @Environment(\.navigate) private var navigateAction
-    private func navigate(_ link: IssueLink) { navigateAction(link) }
+    private func navigate(_ link: any Hashable) { navigateAction(link) }
 
     private func open(_ a: Attachment) {
         guard let api = app.api else { return }
         Task {
-            do {
-                let data = try await api.download(a.contentUrl)
-                let dir = FileManager.default.temporaryDirectory.appendingPathComponent("att-\(a.id)", isDirectory: true)
-                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                let file = dir.appendingPathComponent(a.filename.isEmpty ? "file" : a.filename)
-                try data.write(to: file, options: .atomic)
-                presentQuickLook(file)
-            } catch {
-                model.actionError = error.localizedDescription
-            }
+            do { try await previewAttachment(a, api: api) } catch { model.actionError = error.localizedDescription }
         }
     }
+}
+
+/// Вложение (задачи, страницы вики, файл проекта) — скачать с ключом и показать в Quick Look.
+@MainActor func previewAttachment(_ a: Attachment, api: RedmineAPI) async throws {
+    let data = try await api.download(a.contentUrl)
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("att-\(a.id)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let file = dir.appendingPathComponent(a.filename.isEmpty ? "file" : a.filename)
+    try data.write(to: file, options: .atomic)
+    presentQuickLook(file)
 }
 
 /// Выбор из медиатеки → файлы (имя по дате и типу).
@@ -679,8 +703,9 @@ struct ConfirmDelete {
 
 /// Обёртка: замыкание в окружении сравнивается по ссылке и дёргало бы зависимые виды на каждом обновлении.
 struct NavigateAction: Equatable {
-    var perform: @MainActor (IssueLink) -> Void = { _ in }
-    @MainActor func callAsFunction(_ l: IssueLink) { perform(l) }
+    /// IssueLink или WikiRef — то, для чего у стека есть navigationDestination.
+    var perform: @MainActor (any Hashable) -> Void = { _ in }
+    @MainActor func callAsFunction(_ l: any Hashable) { perform(l) }
     static func == (a: Self, b: Self) -> Bool { true }
 }
 

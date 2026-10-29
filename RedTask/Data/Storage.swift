@@ -70,6 +70,10 @@ struct AppSettings: Codable, Sendable, Equatable {
     var notifByIssue = false
     /// Комментарии: свежие сверху.
     var newestFirst = true
+    /// Избранные проекты — локально, на учётку (accountKey → id проектов): на сервере такого нет.
+    var projectPins: [String: [Int]] = [:]
+    /// Экран вехи: доска вместо списка.
+    var versionBoard = false
 
     var isLoggedIn: Bool { !serverURL.isEmpty && userId != 0 }
     var account: String { "\(serverURL)#\(userId)" }

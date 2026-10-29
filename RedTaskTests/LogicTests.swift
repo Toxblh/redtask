@@ -211,3 +211,17 @@ struct CommentFilesTests {
         #expect(commentAttachments(j, in: [a, b]).map(\.id) == [7])
     }
 }
+
+@Suite("Проект")
+struct ProjectTests {
+    @Test func wikiTreeByParent() {
+        let pages: [WikiPageInfo] = decode(#"[{"title":"B","parent":{"title":"Wiki"}},{"title":"Wiki"},{"title":"A","parent":{"title":"Wiki"}},{"title":"C","parent":{"title":"A"}},{"title":"Orphan","parent":{"title":"Gone"}}]"#)
+        #expect(wikiTree(pages).map { "\($0.depth)\($0.page.title)" } == ["0Orphan", "0Wiki", "1A", "2C", "1B"])
+    }
+
+    @Test func versionsOpenThenLockedByDue() {
+        let vs: [Version] = decode(#"[{"id":1,"name":"x","status":"closed"},{"id":2,"name":"n","status":"open"},{"id":3,"name":"l","status":"locked","due_date":"2026-01-01"},{"id":4,"name":"o","status":"open","due_date":"2026-02-01"}]"#)
+        let g = versionGroups(vs)
+        #expect(g.open.map(\.id) == [4, 2, 3] && g.closed.map(\.id) == [1])
+    }
+}

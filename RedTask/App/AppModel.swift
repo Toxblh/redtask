@@ -3,10 +3,10 @@ import SwiftUI
 import WebKit
 import UserNotifications
 
-/// Куда перейти: задача и, если есть, комментарий (из уведомления, ссылки, колокольчика).
+/// Куда перейти: задача и, если есть, журнал — фрагментом «note-N» или «change-ID» (уведомление, ссылка, колокольчик).
 struct OpenRequest: Equatable {
     var issueId: Int
-    var note: Int?
+    var fragment: String?
     var token = UUID()
 }
 
@@ -70,7 +70,7 @@ final class AppModel {
         }
         if d.integer(forKey: "RTIssue") > 0 {
             let id = d.integer(forKey: "RTIssue"), note = d.integer(forKey: "RTNote")
-            Task { try? await Task.sleep(for: .seconds(2)); open(id, note: note > 0 ? note : nil) }
+            Task { try? await Task.sleep(for: .seconds(2)); open(id, fragment: note > 0 ? "change-\(note)" : nil) }
         }
     }
     #endif
@@ -262,20 +262,29 @@ final class AppModel {
 
     func cancelPendingFavorite() { pendingFavorite = nil }
 
-    func open(_ issueId: Int, note: Int? = nil) { openRequest = OpenRequest(issueId: issueId, note: note) }
+    // MARK: - Избранные проекты (локально, на учётку)
+
+    var projectPins: [Int] { settings.projectPins[account] ?? [] }
+    func isPinned(_ projectId: Int) -> Bool { projectPins.contains(projectId) }
+    func togglePin(_ projectId: Int) {
+        var pins = projectPins
+        if let i = pins.firstIndex(of: projectId) { pins.remove(at: i) } else { pins.append(projectId) }
+        settings.projectPins[account] = pins
+    }
+
+    func open(_ issueId: Int, fragment: String? = nil) { openRequest = OpenRequest(issueId: issueId, fragment: fragment) }
 
     func refreshUnread() async {
         unreadCount = await NotifStore.shared.unread().count
         try? await UNUserNotificationCenter.current().setBadgeCount(unreadCount)
     }
 
-    /// Universal link https://сервер/issues/123[#note-5] → задача.
+    /// Universal link https://сервер/issues/123[#note-5 | #change-ID] → задача; журнал найдёт journalForFragment.
     func handle(url: URL) {
         guard let base = api?.baseURL, url.host == base.host else { return }
         let parts = url.path.split(separator: "/")
         guard let i = parts.firstIndex(of: "issues"), i + 1 < parts.count, let id = Int(parts[i + 1]) else { return }
-        let note = url.fragment.flatMap { $0.hasPrefix("note-") ? Int($0.dropFirst(5)) : nil }
-        open(id, note: note)
+        open(id, fragment: url.fragment)
     }
 
     // MARK: - Пропуск WAF

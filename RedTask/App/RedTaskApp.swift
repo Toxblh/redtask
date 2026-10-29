@@ -53,7 +53,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             if action == Poller.muteAction {
                 AppModel.shared.settings.mutedIssues[issueId] = subject
             } else {
-                AppModel.shared.open(issueId, note: note)
+                AppModel.shared.open(issueId, fragment: note.map { "change-\($0)" })
             }
         }
     }

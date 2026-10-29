@@ -105,6 +105,7 @@ struct IssueQuery: Sendable, Hashable {
     var issueIds: [Int]?
     /// Избранное плагина redmine_favourites_issues (фильтр favourite_state).
     var favorites = false
+    var fixedVersionId: Int?
     var updatedSince: String?
     var sort = "updated_on:desc"
     var limit = 50
@@ -302,6 +303,29 @@ final class RedmineAPI: Sendable {
 
     func project(_ id: Int) async throws -> Project { try await (get("projects/\(id).json", [("include", "trackers")]) as ProjectResponse).project }
     func versions(_ projectId: Int) async throws -> [Version] { try await (get("projects/\(projectId)/versions.json") as VersionsResponse).versions }
+    /// Проект с включёнными модулями — какие разделы показывать.
+    func projectModules(_ id: Int) async throws -> Project {
+        try await (get("projects/\(id).json", [("include", "enabled_modules")]) as ProjectResponse).project
+    }
+    func wikiIndex(_ project: String) async throws -> [WikiPageInfo] { try await (get("projects/\(project)/wiki/index.json") as WikiIndexResponse).wikiPages }
+    func wikiPage(_ project: String, _ title: String) async throws -> WikiPage {
+        try await (get("projects/\(project)/wiki/\(title).json", [("include", "attachments")]) as WikiPageResponse).wikiPage
+    }
+    func projectFiles(_ projectId: Int) async throws -> [Attachment] { try await (get("projects/\(projectId)/files.json") as FilesResponse).files }
+
+    /// Все задачи вехи, страницами, не больше 500 (spec 3.2).
+    func versionIssues(_ versionId: Int) async throws -> [Issue] {
+        var q = IssueQuery(statusFilter: "*", limit: 100)
+        q.fixedVersionId = versionId
+        var out: [Issue] = []
+        while out.count < 500 {
+            let page = try await issues(q)
+            out += page.issues
+            q.offset += page.issues.count
+            if page.issues.isEmpty || q.offset >= page.totalCount { break }
+        }
+        return Array(out.prefix(500))
+    }
     func issueCategories(_ projectId: Int) async throws -> [Named] {
         try await (get("projects/\(projectId)/issue_categories.json") as CategoriesResponse).issueCategories
     }
@@ -320,6 +344,17 @@ final class RedmineAPI: Sendable {
             memo.withLock { $0.customFieldsForbidden = true }
             return []
         }
+    }
+
+    /// Участники проекта с ролями (обзор проекта).
+    func memberships(_ projectId: Int) async throws -> [Membership] {
+        var out: [Membership] = []
+        while true {
+            let page: MembershipsResponse = try await get("projects/\(projectId)/memberships.json", [("limit", "100"), ("offset", String(out.count))])
+            out += page.memberships
+            if out.count >= page.totalCount || page.memberships.isEmpty || out.count >= 1000 { break }
+        }
+        return out
     }
 
     /// Участники проекта; группы тоже — задачу можно назначить на группу.
@@ -342,6 +377,7 @@ final class RedmineAPI: Sendable {
         return try await get("issues.json", [
             ("limit", String(q.limit)), ("offset", String(q.offset)), ("sort", q.sort), ("status_id", q.statusFilter),
             ("project_id", q.projectId.map(String.init)), ("parent_id", q.parentId.map(String.init)),
+            ("fixed_version_id", q.fixedVersionId.map(String.init)),
             ("assigned_to_id", q.assignedToMe ? "me" : nil), ("watcher_id", q.watchedByMe ? "me" : nil),
             ("author_id", q.authoredByMe ? "me" : nil), ("subject", q.subject.map { "~\($0)" }),
             ("issue_id", q.issueIds?.map(String.init).joined(separator: ",")),

@@ -72,6 +72,8 @@ enum Textile {
     static let subRe = RE(#"(?<![\#(W)~])~([\p{L}\p{N}+\-]+)~(?![\#(W)~])"#)
     /// @код@ — тоже на границе слова; длина <code> ограничена (иначе квадратичный разбор).
     static let codeRe = RE(#"(?<![\#(W)@])@(?!\s)([^@\n]+?)(?<!\s)@(?![\#(W)@])|`([^`\n]+?)`|<code>(.{1,1000}?)</code>"#)
+    /// [[Страница]], [[Страница|Текст]], [[проект:Страница]], [[Страница#якорь]].
+    static let wikiRe = RE(#"\[\[([^\[\]|\n]+)(?:\|([^\[\]\n]+))?\]\]"#)
     static let macroRe = RE(#"\{\{([<>]?[a-zA-Z_]\w*)(?:\([^)\n]{0,300}\))?\}\}"#)
 
     static let hrRe = RE(#"^\s*(?:-{3,}|\*{3,})\s*$"#)
@@ -399,7 +401,23 @@ indirect enum Inline: Equatable, Sendable {
     /// user#N, имени которого не знаем — ссылка как написана.
     case person(text: String, id: Int)
     case macro(String)
+    /// [[…]]: project nil — текущий проект; title — имя страницы (пробелы → «_»).
+    case wiki(project: String?, title: String, label: String)
     case styled(InlineStyle, [Inline])
+}
+
+/// Содержимое [[…]] → ссылка вики (набор wiki_link).
+func wikiLink(_ target: String, label: String?) -> Inline {
+    var page = Substring(target.trimmingCharacters(in: .whitespaces))
+    if let hash = page.firstIndex(of: "#") { page = page[..<hash] }
+    var project: String?
+    if let colon = page.firstIndex(of: ":") {
+        project = String(page[..<colon]).trimmingCharacters(in: .whitespaces)
+        page = page[page.index(after: colon)...]
+    }
+    let name = page.trimmingCharacters(in: .whitespaces)
+    let l = label?.trimmingCharacters(in: .whitespaces) ?? ""
+    return .wiki(project: project?.isEmpty == false ? project : nil, title: name.replacingOccurrences(of: " ", with: "_"), label: l.isEmpty ? name : l)
 }
 
 /// Хвостовая пунктуация — не часть ссылки; «)» срезаем, только если она непарная.
@@ -451,6 +469,9 @@ func parseInline(_ line: String, mentions: [String: (Int, String)] = [:]) -> [In
     for m in Textile.codeRe.all(line) where !spans.contains(where: { intersects($0.range, m.range) }) {
         let body = [m.g(1), m.g(2), m.g(3)].first { !$0.isEmpty } ?? ""
         spans.append(Span(range: m.range, item: .code(unraw(body))))
+    }
+    for m in Textile.wikiRe.all(line) where free(m.range.location) {
+        spans.append(Span(range: m.range, item: wikiLink(unraw(m.g(1)), label: m.g(2).isEmpty ? nil : unraw(m.g(2)))))
     }
     for m in Textile.urlRe.all(line) where free(m.range.location) {
         let u = trimURL(m.value)
@@ -516,10 +537,48 @@ func resolveAttachment(_ ref: String, _ attachments: [Attachment]) -> Attachment
         .max { ($0.createdOn, $0.id) < ($1.createdOn, $1.id) }
 }
 
-/// Ответ с цитатой: «Имя писал(а):» и «> » на каждой строке.
-func quoteReply(author: String, text: String, wrote: String = String(localized: "wrote")) -> String {
-    "\(author) \(wrote):\n" + text.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
+/**
+ Ответ с цитатой, как у веб-версии: «Имя писал(а) в #note-N:» (комментарий) или «Имя писал(а):» (описание),
+ «> » на каждой строке. Пустое выделение — nil. lang — «ru» или английский.
+ */
+func quoteReply(author: String, note: Int?, text: String, lang: String) -> String? {
+    let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if body.isEmpty { return nil }
+    let ru = lang.hasPrefix("ru")
+    let head = note.map { "\(ru ? "писал(а) в" : "wrote in") #note-\($0)" } ?? (ru ? "писал(а)" : "wrote")
+    return "\(author) \(head):\n" + body.components(separatedBy: "\n")
         .map { $0.trimmingCharacters(in: .whitespaces).isEmpty ? ">" : "> \($0)" }.joined(separator: "\n") + "\n\n"
+}
+
+/// Язык шапки цитаты — язык интерфейса.
+var quoteLang: String { Bundle.main.preferredLocalizations.first ?? "en" }
+
+/// Текст без разметки, как он виден на экране (для выделения и частичной цитаты): картинки пропускаются.
+func plainText(_ src: String, mentions: [String: (Int, String)] = [:]) -> String {
+    func inline(_ items: [Inline]) -> String {
+        items.map { i -> String in
+            switch i {
+            case .text(let s), .code(let s), .macro(let s): s
+            case .link(let t, _), .issue(let t, _, _), .note(let t, _), .person(let t, _), .wiki(_, _, let t): t
+            case .mention(_, let name): name
+            case .styled(_, let inner): inline(inner)
+            }
+        }.joined()
+    }
+    func lines(_ ls: [TLine]) -> [String] {
+        ls.flatMap { l -> [String] in
+            switch l {
+            case .plain(let s), .heading(_, let s): [inline(parseInline(s, mentions: mentions))]
+            case .code(let s): [unraw(s)]
+            case .item(let d, let n, let t): [String(repeating: "  ", count: d) + (n.map { "\($0). " } ?? "• ") + inline(parseInline(t, mentions: mentions))]
+            case .row(let cells): [cells.map { inline(parseInline($0.text, mentions: mentions)) }.joined(separator: "\t")]
+            case .quote(let q): lines(q)
+            case .collapse(let title, let q): (title.isEmpty ? [] : [title]) + lines(q)
+            case .rule, .image: []
+            }
+        }
+    }
+    return lines(parseTextile(src)).joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 /// Превью комментария без разметки Textile (для уведомлений): «!img.png!» → «img.png», «bq. текст» → «текст».

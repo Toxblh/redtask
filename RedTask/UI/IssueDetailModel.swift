@@ -206,12 +206,24 @@ final class IssueDetailModel {
      Цитата дописывается к черновику. Цитата приватного делает приватным и ответ (как веб-версия);
      без права set_notes_private сервер пометку молча отбросит — тогда приватный текст в черновик не попадает.
      */
-    func reply(to j: Journal) {
+    func reply(to j: Journal, text: String? = nil) {
         editingJournal = nil
         quoteRefused = j.privateNotes && perms.state("set_notes_private") == false
         if quoteRefused { return }
         if j.privateNotes { draftPrivate = true }
-        let q = quoteReply(author: j.user?.name ?? "—", text: j.notes ?? "")
+        let number = issue?.journals.firstIndex { $0.id == j.id }.map { $0 + 1 }
+        append(quoteReply(author: j.user?.name ?? "—", note: number, text: text ?? j.notes ?? "", lang: quoteLang))
+    }
+
+    /// Цитата выделения из описания: «{автор задачи} писал(а):», без ссылки на комментарий.
+    func quoteDescription(_ text: String) {
+        editingJournal = nil
+        quoteRefused = false
+        append(quoteReply(author: issue?.author.name ?? "—", note: nil, text: text, lang: quoteLang))
+    }
+
+    private func append(_ quote: String?) {
+        guard let q = quote else { return }
         let base = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = (base.isEmpty ? "" : base + "\n\n") + q.trimmingCharacters(in: .whitespacesAndNewlines) + "\n\n"
     }

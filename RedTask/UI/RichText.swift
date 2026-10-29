@@ -7,9 +7,20 @@ enum RichLink {
     static func issue(_ id: Int, note: Int?) -> URL { URL(string: "\(scheme)://issue/\(id)" + (note.map { "?note=\($0)" } ?? ""))! }
     static func note(_ n: Int) -> URL { URL(string: "\(scheme)://note/\(n)")! }
     static func user(_ id: Int) -> URL { URL(string: "\(scheme)://user/\(id)")! }
+    static func wiki(_ project: String?, _ title: String) -> URL {
+        var c = URLComponents()
+        c.scheme = scheme; c.host = "wiki"
+        c.queryItems = [URLQueryItem(name: "title", value: title)] + (project.map { [URLQueryItem(name: "project", value: $0)] } ?? [])
+        return c.url!
+    }
 
-    enum Target { case issue(Int, Int?), note(Int), user(Int) }
+    enum Target { case issue(Int, Int?), note(Int), user(Int), wiki(String?, String) }
     static func parse(_ url: URL) -> Target? {
+        if url.scheme == scheme, url.host == "wiki" {
+            let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            guard let title = q.first(where: { $0.name == "title" })?.value else { return nil }
+            return .wiki(q.first { $0.name == "project" }?.value, title)
+        }
         guard url.scheme == scheme, let host = url.host, let n = Int(url.lastPathComponent) else { return nil }
         switch host {
         case "issue":
@@ -295,6 +306,10 @@ struct InlineText: View {
             return a
         case .mention(_, let name):
             return AttributedString(name)
+        case .wiki(let project, let title, let label):
+            var a = AttributedString(label)
+            a.link = RichLink.wiki(project, title)
+            return a
         case .macro(let name):
             var a = AttributedString(name)
             a.foregroundColor = .secondary

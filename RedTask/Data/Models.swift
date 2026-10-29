@@ -91,7 +91,7 @@ struct IssueStatus: Codable, Sendable, Hashable, Identifiable {
 }
 
 /// Вид статуса для цвета — как на Android (три слоя, от точного к общему).
-enum StatusKind: Sendable { case todo, inProgress, done, rejected }
+enum StatusKind: String, Sendable { case todo, inProgress = "in_progress", done, rejected }
 
 extension IssueStatus {
     /// Точечные исключения по полному имени — побеждают эвристику.
@@ -132,7 +132,10 @@ struct Project: Codable, Sendable, Hashable, Identifiable {
     var description: String?
     var parent: Named?
     var status: Int?
+    var homepage: String?
     @D var trackers: [Tracker]
+    /// Только с include=enabled_modules; nil — не спрашивали.
+    var enabledModules: [Named]?
     @D var issueCustomFields: [Named]
     init(id: Int, name: String = "") { self.id = id; self.name = name }
 }
@@ -142,6 +145,8 @@ struct Version: Codable, Sendable, Hashable, Identifiable {
     @D var name: String
     var status: String?
     var dueDate: String?
+    var description: String?
+    var project: Named?
 }
 
 struct CustomField: Codable, Sendable, Hashable, Identifiable {
@@ -350,6 +355,41 @@ struct SearchResult: Codable, Sendable, Hashable, Identifiable {
     @D var datetime: String
 }
 
+struct WikiParent: Codable, Sendable, Hashable { @D var title: String }
+
+struct WikiPageInfo: Codable, Sendable, Hashable, Identifiable {
+    @D var title: String
+    var parent: WikiParent?
+    var version: Int?
+    @D var updatedOn: String
+    var id: String { title }
+}
+
+struct WikiPage: Codable, Sendable, Hashable {
+    @D var title: String
+    @D var text: String
+    var version: Int?
+    var author: Named?
+    @D var updatedOn: String
+    @D var attachments: [Attachment]
+}
+
+/// Страницы вики деревом по parent: корни и дети по имени, с глубиной. Страница с неизвестным родителем — корень.
+func wikiTree(_ pages: [WikiPageInfo]) -> [(page: WikiPageInfo, depth: Int)] {
+    let titles = Set(pages.map(\.title))
+    let kids = Dictionary(grouping: pages) { p in p.parent.map(\.title).flatMap { titles.contains($0) ? $0 : nil } ?? "" }
+    var out: [(page: WikiPageInfo, depth: Int)] = []
+    var seen = Set<String>()
+    func walk(_ parent: String, _ depth: Int) {
+        for p in (kids[parent] ?? []).sorted(by: { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }) where seen.insert(p.title).inserted {
+            out.append((p, depth))
+            walk(p.title, depth + 1)
+        }
+    }
+    walk("", 0)
+    return out
+}
+
 // MARK: - Конверты ответов
 
 struct IssuesResponse: Codable, Sendable { @D var issues: [Issue]; @D var totalCount: Int }
@@ -362,6 +402,9 @@ struct StatusesResponse: Codable, Sendable { @D var issueStatuses: [IssueStatus]
 struct PrioritiesResponse: Codable, Sendable { @D var issuePriorities: [Priority] }
 struct TrackersResponse: Codable, Sendable { @D var trackers: [Tracker] }
 struct VersionsResponse: Codable, Sendable { @D var versions: [Version] }
+struct WikiIndexResponse: Codable, Sendable { @D var wikiPages: [WikiPageInfo] }
+struct WikiPageResponse: Codable, Sendable { var wikiPage: WikiPage }
+struct FilesResponse: Codable, Sendable { @D var files: [Attachment] }
 struct MembershipsResponse: Codable, Sendable { @D var memberships: [Membership]; @D var totalCount: Int }
 struct ActivitiesResponse: Codable, Sendable { @D var timeEntryActivities: [TimeEntryActivity] }
 struct TimeEntriesResponse: Codable, Sendable { @D var timeEntries: [TimeEntry]; @D var totalCount: Int }
@@ -393,3 +436,86 @@ enum JSON {
 
 extension Tracker { init(id: Int, name: String) { self.id = id; self.name = name } }
 extension Priority { init(id: Int, name: String) { self.id = id; self.name = name } }
+
+// MARK: - Правила спецификации (spec/PARITY.md, наборы spec/vectors.json)
+
+/// Номер комментария N — позиция журнала в issue.journals с 1 (как #note-N на сайте).
+func noteUrl(server: URL, issue: Int, journals: [Int], journalId: Int) -> URL? {
+    guard let n = journals.firstIndex(of: journalId) else { return nil }
+    return URL(string: server.appendingPathComponent("issues").appendingPathComponent(String(issue)).absoluteString + "#note-\(n + 1)")
+}
+
+/// Фрагмент ссылки → id журнала: note-N — по позиции, change-ID — по id.
+func journalForFragment(_ journals: [Int], _ fragment: String) -> Int? {
+    if fragment.hasPrefix("note-"), let n = Int(fragment.dropFirst(5)), n >= 1, n <= journals.count { return journals[n - 1] }
+    if fragment.hasPrefix("change-"), let id = Int(fragment.dropFirst(7)), journals.contains(id) { return id }
+    return nil
+}
+
+/// Избранные проекты: существующие закреплённые, по имени без учёта регистра.
+func pinnedProjects(_ projects: [Project], pins: [Int]) -> [Project] {
+    let set = Set(pins)
+    return projects.filter { set.contains($0.id) }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+}
+
+/// Вехи проекта: открытые (open, затем locked) по сроку, без срока — в конце; закрытые отдельно.
+func versionGroups(_ versions: [Version]) -> (open: [Version], closed: [Version]) {
+    let open = versions.filter { $0.status != "closed" }.sorted {
+        ($0.status == "locked" ? 1 : 0, $0.dueDate ?? "9999", $0.name) < ($1.status == "locked" ? 1 : 0, $1.dueDate ?? "9999", $1.name)
+    }
+    return (open, versions.filter { $0.status == "closed" })
+}
+
+/// Прогресс вехи по числу закрытых задач.
+struct VersionProgress: Sendable, Hashable {
+    var done: Int, total: Int
+    var percent: Int { total == 0 ? 0 : done * 100 / total }
+    init(closed: [Bool]) { done = closed.filter { $0 }.count; total = closed.count }
+}
+
+/// Вариант фильтра «Исполнитель»: all, me, user:ID (с именем), none.
+struct AssigneeOption: Sendable, Hashable, Identifiable {
+    var key: String
+    var name: String?
+    var count: Int
+    var id: String { key }
+}
+
+func assigneeOptions(_ issues: [Issue], me: Int) -> [AssigneeOption] {
+    var out = [AssigneeOption(key: "all", count: issues.count)]
+    let mine = issues.filter { $0.assignedTo?.id == me }.count
+    if mine > 0 { out.append(AssigneeOption(key: "me", count: mine)) }
+    var people: [Int: (String, Int)] = [:]
+    for i in issues { if let a = i.assignedTo, a.id != me { people[a.id] = (a.name, (people[a.id]?.1 ?? 0) + 1) } }
+    out += people.sorted { $0.value.0.localizedCaseInsensitiveCompare($1.value.0) == .orderedAscending }
+        .map { AssigneeOption(key: "user:\($0.key)", name: $0.value.0, count: $0.value.1) }
+    let none = issues.filter { $0.assignedTo == nil }.count
+    if none > 0 { out.append(AssigneeOption(key: "none", count: none)) }
+    return out
+}
+
+func filterByAssignee(_ issues: [Issue], key: String, me: Int) -> [Issue] {
+    switch key {
+    case "me": return issues.filter { $0.assignedTo?.id == me }
+    case "none": return issues.filter { $0.assignedTo == nil }
+    case let k where k.hasPrefix("user:"): return issues.filter { $0.assignedTo.map { "user:\($0.id)" } == k }
+    default: return issues
+    }
+}
+
+struct BoardColumn: Sendable, Identifiable {
+    var status: IssueStatus
+    var issues: [Issue]
+    var id: Int { status.id }
+}
+
+/// Доска: колонка на каждый статус с задачами, в порядке статусов сервера; незнакомые статусы — в конце.
+func boardColumns(_ issues: [Issue], statusOrder: [Int]) -> [BoardColumn] {
+    var cols: [BoardColumn] = []
+    for i in issues {
+        if let k = cols.firstIndex(where: { $0.status.id == i.status.id }) { cols[k].issues.append(i) }
+        else { cols.append(BoardColumn(status: i.status, issues: [i])) }
+    }
+    func rank(_ c: BoardColumn) -> Int { statusOrder.firstIndex(of: c.status.id) ?? Int.max }
+    return cols.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
+}

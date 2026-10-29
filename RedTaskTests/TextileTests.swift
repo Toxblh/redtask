@@ -129,10 +129,6 @@ struct TextileInlineTests {
     @Test func notePreviewStripsMarkup() {
         #expect(notePreview("bq. *Важно*: !shot.png! \"тут\":http://x") == "Важно: shot.png тут")
     }
-
-    @Test func quoteReplyPrefixesLines() {
-        #expect(quoteReply(author: "Иван", text: "раз\n\nдва", wrote: "писал(а)") == "Иван писал(а):\n> раз\n>\n> два\n\n")
-    }
 }
 
 @Suite("Редактор")
@@ -163,5 +159,9 @@ struct TableCellTests {
         let c = parseCells("|_.Статья |_.б/н | 7700.00 |")
         #expect(c.map(\.header) == [true, true, false])
         #expect(c.map(\.text) == ["Статья", "б/н", "7700.00"])
+    }
+
+    @Test func plainTextAsShown() {
+        #expect(plainText("h2. Шаги\n\n# *раз* @код@\n# [[Вики|два]]\n\n> цитата\n!a.png!") == "Шаги\n\n1. раз код\n2. два\n\nцитата")
     }
 }
