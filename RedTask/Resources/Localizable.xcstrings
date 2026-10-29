@@ -56,6 +56,38 @@
         }
       }
     },
+    "%@ · %@ · version %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ · version %3$lld"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@ · версия %3$lld"
+          }
+        }
+      }
+    },
+    "%@ (%lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ (%2$lld)"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (%2$lld)"
+          }
+        }
+      }
+    },
     "%@ #%@ removed" : {
       "localizations" : {
         "en" : {
@@ -118,6 +150,9 @@
         }
       }
     },
+    "%lld" : {
+
+    },
     "%lld d overdue" : {
       "localizations" : {
         "ru" : {
@@ -176,6 +211,22 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "%lld of %lld closed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld of %2$lld closed"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld из %2$lld закрыто"
           }
         }
       }
@@ -326,6 +377,16 @@
         }
       }
     },
+    "Add to Pinned" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить в избранные"
+          }
+        }
+      }
+    },
     "Address" : {
       "localizations" : {
         "ru" : {
@@ -342,6 +403,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Все"
+          }
+        }
+      }
+    },
+    "All projects" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Все проекты"
           }
         }
       }
@@ -442,6 +513,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Блокирует"
+          }
+        }
+      }
+    },
+    "Board" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доска"
           }
         }
       }
@@ -566,12 +647,32 @@
         }
       }
     },
+    "closed" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "закрыта"
+          }
+        }
+      }
+    },
     "Closed" : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Закрытые"
+          }
+        }
+      }
+    },
+    "Closed (%lld)" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Закрытые (%lld)"
           }
         }
       }
@@ -1152,6 +1253,16 @@
         }
       }
     },
+    "Everyone" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Все"
+          }
+        }
+      }
+    },
     "Favorite" : {
       "localizations" : {
         "ru" : {
@@ -1362,12 +1473,32 @@
         }
       }
     },
+    "Homepage" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Домашняя страница"
+          }
+        }
+      }
+    },
     "Hours" : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Часы"
+          }
+        }
+      }
+    },
+    "Identifier" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Идентификатор"
           }
         }
       }
@@ -1462,6 +1593,16 @@
         }
       }
     },
+    "Issues" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Задачи"
+          }
+        }
+      }
+    },
     "Italic" : {
       "localizations" : {
         "ru" : {
@@ -1538,6 +1679,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LinkedIn"
+          }
+        }
+      }
+    },
+    "List" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Список"
+          }
+        }
+      }
+    },
+    "locked" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "заблокирована"
           }
         }
       }
@@ -1832,6 +1993,26 @@
         }
       }
     },
+    "No files" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файлов нет"
+          }
+        }
+      }
+    },
+    "No issues in this version" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В вехе нет задач"
+          }
+        }
+      }
+    },
     "No notifications yet" : {
       "localizations" : {
         "ru" : {
@@ -1868,6 +2049,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Трудозатрат нет"
+          }
+        }
+      }
+    },
+    "No versions" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вех нет"
+          }
+        }
+      }
+    },
+    "No wiki pages" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Страниц вики нет"
           }
         }
       }
@@ -2052,6 +2253,16 @@
         }
       }
     },
+    "open" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "открыта"
+          }
+        }
+      }
+    },
     "Open" : {
       "localizations" : {
         "ru" : {
@@ -2122,12 +2333,32 @@
         }
       }
     },
+    "Overview" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Обзор"
+          }
+        }
+      }
+    },
     "Parent issue" : {
       "localizations" : {
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Родительская задача"
+          }
+        }
+      }
+    },
+    "Parent project" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Родительский проект"
           }
         }
       }
@@ -2158,6 +2389,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Фото"
+          }
+        }
+      }
+    },
+    "Pin" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "В избранное"
+          }
+        }
+      }
+    },
+    "Pinned" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Избранные"
           }
         }
       }
@@ -2382,6 +2633,16 @@
         }
       }
     },
+    "Remove from Pinned" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Убрать из избранных"
+          }
+        }
+      }
+    },
     "Remove relation" : {
       "localizations" : {
         "ru" : {
@@ -2472,6 +2733,16 @@
         }
       }
     },
+    "Section" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Раздел"
+          }
+        }
+      }
+    },
     "Select a project" : {
       "localizations" : {
         "ru" : {
@@ -2488,6 +2759,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Выберите задачу"
+          }
+        }
+      }
+    },
+    "Select text" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выделить текст"
           }
         }
       }
@@ -3042,6 +3323,16 @@
         }
       }
     },
+    "Unpin" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Из избранного"
+          }
+        }
+      }
+    },
     "Upload (%lld)" : {
       "localizations" : {
         "ru" : {
@@ -3068,6 +3359,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Версия"
+          }
+        }
+      }
+    },
+    "Versions" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вехи"
           }
         }
       }
@@ -3142,6 +3443,16 @@
         }
       }
     },
+    "Wiki" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вики"
+          }
+        }
+      }
+    },
     "Write" : {
       "localizations" : {
         "ru" : {
@@ -3153,6 +3464,7 @@
       }
     },
     "wrote" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
