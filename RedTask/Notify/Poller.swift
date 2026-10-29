@@ -101,6 +101,9 @@ struct PollCollector {
             if text.isEmpty { continue }
             let cats = journalTypes(j, userId: s.userId, login: s.userLogin)
             var e = entry(issue, at: at, who: j.user, text: text, type: cats[0], eventId: "j\(j.id)", strong: await strong(j, cats[0]))
+            if !(j.notes ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                e.imageId = notificationImage(notes: j.notes, details: j.details, attachments: issue.attachments)
+            }
             for c in cats.dropFirst() { e.alsoTypes[c] = await strong(j, c) }
             out.append(e)
         }
@@ -377,6 +380,22 @@ enum Poller {
         }
     }
 
+    /// Превью вложения (thumbnail 400) во временный JPEG — не дольше 10 с.
+    private static func thumbnailFile(_ id: Int, api: RedmineAPI) async -> URL? {
+        let data = await withTaskGroup(of: Data?.self) { g in
+            g.addTask { try? await api.thumbnail(id, size: 400) }
+            g.addTask { try? await Task.sleep(for: .seconds(10)); return nil }
+            let first = await g.next() ?? nil
+            g.cancelAll()
+            return first
+        }
+        // перекодируем в JPEG: системе нужен узнаваемый тип файла
+        guard let data, let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.85) else { return nil }
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("notif-\(id)-\(UUID().uuidString).jpg")
+        do { try jpeg.write(to: file) } catch { return nil }
+        return file
+    }
+
     private static var backfilling = false
 
     /**
@@ -429,6 +448,12 @@ enum Poller {
             if let note = list.compactMap(\.journalId).last { info["note"] = note }
             c.userInfo = info
             c.targetContentIdentifier = "issue-\(issueId)"
+            // картинка — из самого свежего комментария; не скачалась за 10 с — уведомление без неё
+            let comment = list.last { $0.types.contains(NotifType.comment) || $0.types.contains(NotifType.privateNote) }
+            if let id = comment?.imageId, let api = AppModel.shared.api, let file = await thumbnailFile(id, api: api),
+               let a = try? UNNotificationAttachment(identifier: "image", url: file) {
+                c.attachments = [a]
+            }
             try? await center.add(UNNotificationRequest(identifier: "issue-\(issueId)-\(last.key)", content: c, trigger: nil))
         }
     }

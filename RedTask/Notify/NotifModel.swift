@@ -110,6 +110,8 @@ struct NotifEntry: Codable, Sendable, Hashable, Identifiable {
     /// Остальные категории того же события: тип → значимость.
     var alsoTypes: [String: Bool] = [:]
     var author: String = ""
+    /// Картинка комментария (notificationImage) — id вложения для превью.
+    var imageId: Int?
 
     var key: String { "\(issueId)-" + (eventId.isEmpty ? String(at) : eventId) }
     var id: String { key }
@@ -270,3 +272,18 @@ func journalTypes(_ j: Journal, userId: Int, login: String = "") -> [String] {
     return out.isEmpty ? [NotifType.other] : out
 }
 
+
+/**
+ Картинка уведомления (набор notif_image): первая картинка из текста (!имя! → вложение-картинка задачи),
+ иначе первое вложение-картинка из details журнала. id вложения или nil.
+ */
+func notificationImage(notes: String?, details: [JournalDetail], attachments: [Attachment]) -> Int? {
+    func image(_ a: Attachment?) -> Int? { a.flatMap { ($0.contentType ?? "").hasPrefix("image/") ? $0.id : nil } }
+    for line in (notes ?? "").components(separatedBy: "\n") {
+        for m in Textile.imageRe.all(line) { if let id = image(resolveAttachment(m.g(1), attachments)) { return id } }
+    }
+    for d in details where d.property == "attachment" {
+        if let id = image(attachments.first { String($0.id) == d.name }) { return id }
+    }
+    return nil
+}

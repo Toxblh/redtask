@@ -477,7 +477,7 @@ final class RedmineAPI: Sendable {
     }
 
     func issueJournals(_ id: Int) async throws -> Issue {
-        try await (get("issues/\(id).json", [("include", "journals")]) as IssueResponse).issue
+        try await (get("issues/\(id).json", [("include", "journals,attachments")]) as IssueResponse).issue
     }
 
     /// Задачи, созданные не раньше createdSince, в проектах, где я участник (полная форма фильтра:

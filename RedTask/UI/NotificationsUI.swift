@@ -161,6 +161,7 @@ private struct NotifRow: View {
                     Label("Muted", systemImage: "bell.slash").font(.caption).foregroundStyle(.tertiary)
                 }
             }
+            if let id = entry.imageId { NotifThumb(attachmentId: id) }
             if unread {
                 Circle().fill(.tint).frame(width: 8, height: 8).padding(.top, 6)
                     .accessibilityLabel("New")
@@ -168,6 +169,27 @@ private struct NotifRow: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Миниатюра картинки комментария справа в строке колокольчика.
+private struct NotifThumb: View {
+    @Environment(AppModel.self) private var app
+    let attachmentId: Int
+    @State private var image: UIImage?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6).fill(Color(.tertiarySystemFill))
+            if let image { Image(uiImage: image).resizable().scaledToFill() } else { Image(systemName: "photo").foregroundStyle(.secondary) }
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .accessibilityHidden(true)
+        .task(id: attachmentId) {
+            guard let api = app.api else { return }
+            image = await ImageStore.shared.thumbnail(attachmentId, api: api, account: app.account)
+        }
     }
 }
 
@@ -200,7 +222,11 @@ private struct IssueGroupRow: View {
                 }
             }
             .foregroundStyle(.secondary)
-            Text(group.latest.lines.first ?? "").font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+            HStack(alignment: .top) {
+                Text(group.latest.lines.first ?? "").font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                Spacer(minLength: 0)
+                if let id = group.entries.lazy.compactMap(\.imageId).first { NotifThumb(attachmentId: id) }
+            }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
