@@ -15,6 +15,6 @@ let package = Package(
                 "Data/Storage.swift", "Data/FormFields.swift", "Notify/NotifModel.swift",
             ]
         ),
-        .testTarget(name: "RedTaskTests", dependencies: ["RedTaskCore"], path: "RedTaskTests"),
+        .testTarget(name: "RedTaskTests", dependencies: ["RedTaskCore"], path: "RedTaskTests", resources: [.copy("vectors.json")]),
     ]
 )
