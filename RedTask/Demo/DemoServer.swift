@@ -126,7 +126,7 @@ private struct DemoDB {
             if parts.last == "issue_priorities.json" { return ok("issue_priorities", priorities) }
             return ok("time_entry_activities", activities)
         case ("GET", "custom_fields.json"): return (403, "application/json", Data(#"{"errors":[]}"#.utf8))
-        case ("GET", "projects"):
+        case ("GET", "projects"), ("GET", "projects.json"):
             if parts.count == 1 || parts[1] == "projects.json" { return ok("projects", projects, total: projects.count) }
             let key = parts[1].replacingOccurrences(of: ".json", with: "")
             guard let pr = projects.first(where: { String($0.id) == key || $0.identifier == key }) else { return notFound }
