@@ -1,127 +1,563 @@
 {
   "_": "Общие тестовые наборы для трёх клиентов (Android, iOS, GNOME). Канон — redmine-expressive/spec, копии синхронизирует tools/spec-sync.sh. Каждый клиент прогоняет ВСЕ наборы своими модульными тестами; правка поведения начинается с правки этого файла.",
-
   "status_kind": [
-    {"name": "Новая", "closed": false, "kind": "todo"},
-    {"name": "Новая заявка", "closed": false, "kind": "todo"},
-    {"name": "New", "closed": false, "kind": "todo"},
-    {"name": "Бэклог", "closed": false, "kind": "todo"},
-    {"name": "В работе", "closed": false, "kind": "in_progress"},
-    {"name": "На проверке", "closed": false, "kind": "in_progress"},
-    {"name": "Заявка обработана", "closed": false, "kind": "in_progress"},
-    {"name": "Заявка согласована", "closed": false, "kind": "in_progress"},
-    {"name": "Решена", "closed": true, "kind": "done"},
-    {"name": "Закрыта", "closed": true, "kind": "done"},
-    {"name": "Closed", "closed": true, "kind": "done"},
-    {"name": "Отклонена", "closed": true, "kind": "rejected"},
-    {"name": "Rejected", "closed": true, "kind": "rejected"},
-    {"name": "Закрыт без решения", "closed": true, "kind": "rejected"},
-    {"name": "Заблокирован", "closed": false, "kind": "rejected"},
-    {"name": "Прекращено", "closed": true, "kind": "rejected"}
+    {
+      "name": "Новая",
+      "closed": false,
+      "kind": "todo"
+    },
+    {
+      "name": "Новая заявка",
+      "closed": false,
+      "kind": "todo"
+    },
+    {
+      "name": "New",
+      "closed": false,
+      "kind": "todo"
+    },
+    {
+      "name": "Бэклог",
+      "closed": false,
+      "kind": "todo"
+    },
+    {
+      "name": "В работе",
+      "closed": false,
+      "kind": "in_progress"
+    },
+    {
+      "name": "На проверке",
+      "closed": false,
+      "kind": "in_progress"
+    },
+    {
+      "name": "Заявка обработана",
+      "closed": false,
+      "kind": "in_progress"
+    },
+    {
+      "name": "Заявка согласована",
+      "closed": false,
+      "kind": "in_progress"
+    },
+    {
+      "name": "Решена",
+      "closed": true,
+      "kind": "done"
+    },
+    {
+      "name": "Закрыта",
+      "closed": true,
+      "kind": "done"
+    },
+    {
+      "name": "Closed",
+      "closed": true,
+      "kind": "done"
+    },
+    {
+      "name": "Отклонена",
+      "closed": true,
+      "kind": "rejected"
+    },
+    {
+      "name": "Rejected",
+      "closed": true,
+      "kind": "rejected"
+    },
+    {
+      "name": "Закрыт без решения",
+      "closed": true,
+      "kind": "rejected"
+    },
+    {
+      "name": "Заблокирован",
+      "closed": false,
+      "kind": "rejected"
+    },
+    {
+      "name": "Прекращено",
+      "closed": true,
+      "kind": "rejected"
+    }
   ],
-
   "note_link": {
     "_": "Номер комментария N = позиция журнала в issue.journals (с 1, считая журналы без текста). Ссылка: {server}/issues/{id}#note-{N}. Разбор фрагмента: note-N → журнал по позиции, change-ID → журнал по id; иначе null.",
     "server": "https://my.basealt.space",
     "issue": 5,
-    "journals": [101, 102, 103],
+    "journals": [
+      101,
+      102,
+      103
+    ],
     "links": [
-      {"journal": 101, "url": "https://my.basealt.space/issues/5#note-1"},
-      {"journal": 103, "url": "https://my.basealt.space/issues/5#note-3"}
+      {
+        "journal": 101,
+        "url": "https://my.basealt.space/issues/5#note-1"
+      },
+      {
+        "journal": 103,
+        "url": "https://my.basealt.space/issues/5#note-3"
+      }
     ],
     "fragments": [
-      {"fragment": "note-2", "journal": 102},
-      {"fragment": "note-3", "journal": 103},
-      {"fragment": "note-9", "journal": null},
-      {"fragment": "note-0", "journal": null},
-      {"fragment": "change-103", "journal": 103},
-      {"fragment": "change-555", "journal": null},
-      {"fragment": "history", "journal": null}
+      {
+        "fragment": "note-2",
+        "journal": 102
+      },
+      {
+        "fragment": "note-3",
+        "journal": 103
+      },
+      {
+        "fragment": "note-9",
+        "journal": null
+      },
+      {
+        "fragment": "note-0",
+        "journal": null
+      },
+      {
+        "fragment": "change-103",
+        "journal": 103
+      },
+      {
+        "fragment": "change-555",
+        "journal": null
+      },
+      {
+        "fragment": "history",
+        "journal": null
+      }
     ]
   },
-
   "quote_reply": {
     "_": "Шапка: «{author} {wrote_in} #note-{N}:» для комментария, «{author} {wrote}:» для описания (note = null). wrote_in = «wrote in» / «писал(а) в», wrote = «wrote» / «писал(а)» — как у веб-версии Redmine. Текст обрезается по краям, каждая строка получает «> », пустая строка — «>», в конце пустая строка. Пустое (одни пробелы) выделение — null, цитаты нет.",
     "cases": [
-      {"author": "Иван Петров", "note": 3, "lang": "ru", "text": "Да, согласен", "out": "Иван Петров писал(а) в #note-3:\n> Да, согласен\n\n"},
-      {"author": "Ivan", "note": 12, "lang": "en", "text": "  first\n\nsecond  \n", "out": "Ivan wrote in #note-12:\n> first\n>\n> second\n\n"},
-      {"author": "Ivan", "note": null, "lang": "en", "text": "from description", "out": "Ivan wrote:\n> from description\n\n"},
-      {"author": "Анна", "note": 1, "lang": "ru", "text": "> старое\nновое", "out": "Анна писал(а) в #note-1:\n> > старое\n> новое\n\n"},
-      {"author": "Ivan", "note": 2, "lang": "en", "text": " \n\t ", "out": null}
+      {
+        "author": "Иван Петров",
+        "note": 3,
+        "lang": "ru",
+        "text": "Да, согласен",
+        "out": "Иван Петров писал(а) в #note-3:\n> Да, согласен\n\n"
+      },
+      {
+        "author": "Ivan",
+        "note": 12,
+        "lang": "en",
+        "text": "  first\n\nsecond  \n",
+        "out": "Ivan wrote in #note-12:\n> first\n>\n> second\n\n"
+      },
+      {
+        "author": "Ivan",
+        "note": null,
+        "lang": "en",
+        "text": "from description",
+        "out": "Ivan wrote:\n> from description\n\n"
+      },
+      {
+        "author": "Анна",
+        "note": 1,
+        "lang": "ru",
+        "text": "> старое\nновое",
+        "out": "Анна писал(а) в #note-1:\n> > старое\n> новое\n\n"
+      },
+      {
+        "author": "Ivan",
+        "note": 2,
+        "lang": "en",
+        "text": " \n\t ",
+        "out": null
+      }
     ]
   },
-
   "project_pins": {
     "_": "Избранные проекты — локально, на аккаунт. Сверху секция «Избранные»: только существующие закреплённые проекты, по имени без учёта регистра. Остальной список не меняется (закреплённые остаются и в нём).",
-    "projects": [{"id": 1, "name": "Бета"}, {"id": 2, "name": "альфа"}, {"id": 3, "name": "Гамма"}, {"id": 4, "name": "Альт Сервер"}],
-    "pins": [3, 1, 99, 4],
-    "pinned": [4, 1, 3]
+    "projects": [
+      {
+        "id": 1,
+        "name": "Бета"
+      },
+      {
+        "id": 2,
+        "name": "альфа"
+      },
+      {
+        "id": 3,
+        "name": "Гамма"
+      },
+      {
+        "id": 4,
+        "name": "Альт Сервер"
+      }
+    ],
+    "pins": [
+      3,
+      1,
+      99,
+      4
+    ],
+    "pinned": [
+      4,
+      1,
+      3
+    ]
   },
-
   "version_progress": {
     "_": "Прогресс вехи — по числу задач: closed из total, percent = floor(closed*100/total), при total = 0 → 0.",
     "cases": [
-      {"closed": [true, false, false], "done": 1, "total": 3, "percent": 33},
-      {"closed": [true, true], "done": 2, "total": 2, "percent": 100},
-      {"closed": [], "done": 0, "total": 0, "percent": 0}
+      {
+        "closed": [
+          true,
+          false,
+          false
+        ],
+        "done": 1,
+        "total": 3,
+        "percent": 33
+      },
+      {
+        "closed": [
+          true,
+          true
+        ],
+        "done": 2,
+        "total": 2,
+        "percent": 100
+      },
+      {
+        "closed": [],
+        "done": 0,
+        "total": 0,
+        "percent": 0
+      }
     ]
   },
-
   "assignee_filter": {
     "_": "Варианты фильтра «Исполнитель» строятся из загруженных задач: all (всегда первым), me (если есть мои), остальные люди по имени без учёта регистра, none (если есть без исполнителя). count — число задач.",
     "me": 7,
     "issues": [
-      {"id": 1, "assignee": {"id": 7, "name": "Я Сам"}},
-      {"id": 2, "assignee": {"id": 9, "name": "борис"}},
-      {"id": 3, "assignee": null},
-      {"id": 4, "assignee": {"id": 8, "name": "Алла"}},
-      {"id": 5, "assignee": {"id": 9, "name": "борис"}}
+      {
+        "id": 1,
+        "assignee": {
+          "id": 7,
+          "name": "Я Сам"
+        }
+      },
+      {
+        "id": 2,
+        "assignee": {
+          "id": 9,
+          "name": "борис"
+        }
+      },
+      {
+        "id": 3,
+        "assignee": null
+      },
+      {
+        "id": 4,
+        "assignee": {
+          "id": 8,
+          "name": "Алла"
+        }
+      },
+      {
+        "id": 5,
+        "assignee": {
+          "id": 9,
+          "name": "борис"
+        }
+      }
     ],
     "options": [
-      {"key": "all", "count": 5},
-      {"key": "me", "count": 1},
-      {"key": "user:8", "name": "Алла", "count": 1},
-      {"key": "user:9", "name": "борис", "count": 2},
-      {"key": "none", "count": 1}
+      {
+        "key": "all",
+        "count": 5
+      },
+      {
+        "key": "me",
+        "count": 1
+      },
+      {
+        "key": "user:8",
+        "name": "Алла",
+        "count": 1
+      },
+      {
+        "key": "user:9",
+        "name": "борис",
+        "count": 2
+      },
+      {
+        "key": "none",
+        "count": 1
+      }
     ],
     "select": [
-      {"key": "all", "ids": [1, 2, 3, 4, 5]},
-      {"key": "me", "ids": [1]},
-      {"key": "user:9", "ids": [2, 5]},
-      {"key": "none", "ids": [3]}
+      {
+        "key": "all",
+        "ids": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      {
+        "key": "me",
+        "ids": [
+          1
+        ]
+      },
+      {
+        "key": "user:9",
+        "ids": [
+          2,
+          5
+        ]
+      },
+      {
+        "key": "none",
+        "ids": [
+          3
+        ]
+      }
     ]
   },
-
   "board_columns": {
     "_": "Доска: колонка на каждый статус, у которого есть хотя бы одна задача (после фильтров), порядок колонок — порядок issue_statuses сервера; внутри колонки порядок задач сохраняется (updated_on desc).",
-    "status_order": [1, 2, 3, 5],
-    "issues": [{"id": 10, "status": 3}, {"id": 11, "status": 1}, {"id": 12, "status": 3}, {"id": 13, "status": 5}],
-    "columns": [{"status": 1, "ids": [11]}, {"status": 3, "ids": [10, 12]}, {"status": 5, "ids": [13]}]
+    "status_order": [
+      1,
+      2,
+      3,
+      5
+    ],
+    "issues": [
+      {
+        "id": 10,
+        "status": 3
+      },
+      {
+        "id": 11,
+        "status": 1
+      },
+      {
+        "id": 12,
+        "status": 3
+      },
+      {
+        "id": 13,
+        "status": 5
+      }
+    ],
+    "columns": [
+      {
+        "status": 1,
+        "ids": [
+          11
+        ]
+      },
+      {
+        "status": 3,
+        "ids": [
+          10,
+          12
+        ]
+      },
+      {
+        "status": 5,
+        "ids": [
+          13
+        ]
+      }
+    ]
   },
-
   "notif_image": {
     "_": "Картинка уведомления: из самого свежего события-комментария. Сначала первая картинка из текста (!имя! → вложение задачи с таким именем без учёта регистра, только image/*), потом первое вложение-картинка из details журнала (property=attachment, name = id). Иначе null. Показ — превью attachments/thumbnail/{id}/400.",
     "attachments": [
-      {"id": 11, "filename": "shot.png", "content_type": "image/png"},
-      {"id": 12, "filename": "log.txt", "content_type": "text/plain"},
-      {"id": 13, "filename": "Photo.JPG", "content_type": "image/jpeg"}
+      {
+        "id": 11,
+        "filename": "shot.png",
+        "content_type": "image/png"
+      },
+      {
+        "id": 12,
+        "filename": "log.txt",
+        "content_type": "text/plain"
+      },
+      {
+        "id": 13,
+        "filename": "Photo.JPG",
+        "content_type": "image/jpeg"
+      }
     ],
     "cases": [
-      {"notes": "см. скрин", "details": [{"property": "attachment", "name": "12"}, {"property": "attachment", "name": "11"}], "image": 11},
-      {"notes": "вот !photo.jpg! и ещё", "details": [{"property": "attachment", "name": "11"}], "image": 13},
-      {"notes": "лог приложил", "details": [{"property": "attachment", "name": "12"}], "image": null},
-      {"notes": "!log.txt!", "details": [], "image": null},
-      {"notes": "", "details": [{"property": "attr", "name": "status_id"}], "image": null}
+      {
+        "notes": "см. скрин",
+        "details": [
+          {
+            "property": "attachment",
+            "name": "12"
+          },
+          {
+            "property": "attachment",
+            "name": "11"
+          }
+        ],
+        "image": 11
+      },
+      {
+        "notes": "вот !photo.jpg! и ещё",
+        "details": [
+          {
+            "property": "attachment",
+            "name": "11"
+          }
+        ],
+        "image": 13
+      },
+      {
+        "notes": "лог приложил",
+        "details": [
+          {
+            "property": "attachment",
+            "name": "12"
+          }
+        ],
+        "image": null
+      },
+      {
+        "notes": "!log.txt!",
+        "details": [],
+        "image": null
+      },
+      {
+        "notes": "",
+        "details": [
+          {
+            "property": "attr",
+            "name": "status_id"
+          }
+        ],
+        "image": null
+      }
     ]
   },
-
   "wiki_link": {
     "_": "Ссылки вики Textile: [[Страница]], [[Страница|Текст]], [[проект:Страница]], [[Страница#якорь]]. title: пробелы → «_». project = null — текущий проект. Открываются в приложении (экран страницы вики).",
     "cases": [
-      {"src": "[[Как работать]]", "project": null, "title": "Как_работать", "label": "Как работать"},
-      {"src": "[[Sidebar|Оглавление]]", "project": null, "title": "Sidebar", "label": "Оглавление"},
-      {"src": "[[rel92:Выход релиза]]", "project": "rel92", "title": "Выход_релиза", "label": "Выход релиза"},
-      {"src": "[[FAQ#install]]", "project": null, "title": "FAQ", "label": "FAQ"}
+      {
+        "src": "[[Как работать]]",
+        "project": null,
+        "title": "Как_работать",
+        "label": "Как работать"
+      },
+      {
+        "src": "[[Sidebar|Оглавление]]",
+        "project": null,
+        "title": "Sidebar",
+        "label": "Оглавление"
+      },
+      {
+        "src": "[[rel92:Выход релиза]]",
+        "project": "rel92",
+        "title": "Выход_релиза",
+        "label": "Выход релиза"
+      },
+      {
+        "src": "[[FAQ#install]]",
+        "project": null,
+        "title": "FAQ",
+        "label": "FAQ"
+      }
+    ]
+  },
+  "embedded_thumbnail": {
+    "_": "Встроенная миниатюра документа из УЖЕ скачанного (закэшированного) файла: ODF (odt/ods/odp/odg) — Thumbnails/thumbnail.png, OOXML (docx/xlsx/pptx) — docProps/thumbnail.jpeg|.jpg|.png (wmf/emf не показываем). Zip читается по центральному каталогу (размеры в локальном заголовке могут быть нулями — data descriptor), методы 0 (stored) и 8 (deflate). Иначе null. zip и out — base64.",
+    "cases": [
+      {
+        "name": "odt, миниатюра сжата deflate",
+        "zip": "UEsDBBQAAAAAAEcXXl1exjIMJwAAACcAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwMEFAAAAAgARxdeXQarnFUiAAAAXwEAAAsAAABjb250ZW50LnhtbLPJT0vLTE61SslPLs1NzSvRTc7PKwHSdhWjgGhgo48rFAFQSwMEFAAAAAgARxdeXQuupYlAAAAARQAAABgAAABUaHVtYm5haWxzL3RodW1ibmFpbC5wbmfrDPBz5+WS4mJgYOD19HAJAtKMIMzBBCQnlAffA1I8ni6OIRVzki0U1dkZmLYxsposK10FFGfwdPVzWeeU0AQAUEsBAhQDFAAAAAAARxdeXV7GMgwnAAAAJwAAAAgAAAAAAAAAAAAAAIABAAAAAG1pbWV0eXBlUEsBAhQDFAAAAAgARxdeXQarnFUiAAAAXwEAAAsAAAAAAAAAAAAAAIABTQAAAGNvbnRlbnQueG1sUEsBAhQDFAAAAAgARxdeXQuupYlAAAAARQAAABgAAAAAAAAAAAAAAIABmAAAAFRodW1ibmFpbHMvdGh1bWJuYWlsLnBuZ1BLBQYAAAAAAwADALUAAAAOAQAAAAA=",
+        "out": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGM4IScHAAK2AQU0pnWqAAAAAElFTkSuQmCC"
+      },
+      {
+        "name": "odt, записан потоком (data descriptor, размеры только в центральном каталоге)",
+        "zip": "UEsDBBQACAAAAEcXXl0AAAAAAAAAAAAAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwcIXsYyDCcAAAAnAAAAUEsDBBQACAAIAEcXXl0AAAAAAAAAAAAAAAALAAAAY29udGVudC54bWyzyU9Ly0xOtUrJTy7NTc0r0U3OzysB0nYVo4BoYKOPKxQBUEsHCAarnFUiAAAAXwEAAFBLAwQUAAgACABHF15dAAAAAAAAAAAAAAAAGAAAAFRodW1ibmFpbHMvdGh1bWJuYWlsLnBuZ+sM8HPn5ZLiYmBg4PX0cAkC0owgzMEEJCeUB98DUjyeLo4hFXOSLRTV2RmYtjGymiwrXQUUZ/B09XNZ55TQBABQSwcIC66liUAAAABFAAAAUEsBAhQDFAAIAAAARxdeXV7GMgwnAAAAJwAAAAgAAAAAAAAAAAAAAIABAAAAAG1pbWV0eXBlUEsBAhQDFAAIAAgARxdeXQarnFUiAAAAXwEAAAsAAAAAAAAAAAAAAIABXQAAAGNvbnRlbnQueG1sUEsBAhQDFAAIAAgARxdeXQuupYlAAAAARQAAABgAAAAAAAAAAAAAAIABuAAAAFRodW1ibmFpbHMvdGh1bWJuYWlsLnBuZ1BLBQYAAAAAAwADALUAAAA+AQAAAAA=",
+        "out": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGM4IScHAAK2AQU0pnWqAAAAAElFTkSuQmCC"
+      },
+      {
+        "name": "docx с docProps/thumbnail.jpeg, без сжатия",
+        "zip": "UEsDBBQAAAAIAEcXXl3HHBc8CgAAAAgAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMJqSxILda3AwBQSwMEFAAAAAgARxdeXQarnFUiAAAAXwEAABEAAAB3b3JkL2RvY3VtZW50LnhtbLPJT0vLTE61SslPLs1NzSvRTc7PKwHSdhWjgGhgo48rFAFQSwMEFAAAAAAARxdeXYBdabZCAAAAQgAAABcAAABkb2NQcm9wcy90aHVtYm5haWwuanBlZ//Y/+BKRklGLXRlc3QtYnl0ZXNKRklGLXRlc3QtYnl0ZXNKRklGLXRlc3QtYnl0ZXNKRklGLXRlc3QtYnl0ZXP/2VBLAQIUAxQAAAAIAEcXXl3HHBc8CgAAAAgAAAATAAAAAAAAAAAAAACAAQAAAABbQ29udGVudF9UeXBlc10ueG1sUEsBAhQDFAAAAAgARxdeXQarnFUiAAAAXwEAABEAAAAAAAAAAAAAAIABOwAAAHdvcmQvZG9jdW1lbnQueG1sUEsBAhQDFAAAAAAARxdeXYBdabZCAAAAQgAAABcAAAAAAAAAAAAAAIABjAAAAGRvY1Byb3BzL3RodW1ibmFpbC5qcGVnUEsFBgAAAAADAAMAxQAAAAMBAAAAAA==",
+        "out": "/9j/4EpGSUYtdGVzdC1ieXRlc0pGSUYtdGVzdC1ieXRlc0pGSUYtdGVzdC1ieXRlc0pGSUYtdGVzdC1ieXRlc//Z"
+      },
+      {
+        "name": "docx только с thumbnail.wmf — не показываем",
+        "zip": "UEsDBBQAAAAIAEcXXl0Gq5xVIgAAAF8BAAARAAAAd29yZC9kb2N1bWVudC54bWyzyU9Ly0xOtUrJTy7NTc0r0U3OzysB0nYVo4BoYKOPKxQBUEsDBBQAAAAIAEcXXl2YpsDuCQAAACwAAAAWAAAAZG9jUHJvcHMvdGh1bWJuYWlsLndtZrt+9tisciIBAFBLAQIUAxQAAAAIAEcXXl0Gq5xVIgAAAF8BAAARAAAAAAAAAAAAAACAAQAAAAB3b3JkL2RvY3VtZW50LnhtbFBLAQIUAxQAAAAIAEcXXl2YpsDuCQAAACwAAAAWAAAAAAAAAAAAAACAAVEAAABkb2NQcm9wcy90aHVtYm5haWwud21mUEsFBgAAAAACAAIAgwAAAI4AAAAAAA==",
+        "out": null
+      },
+      {
+        "name": "zip без миниатюры",
+        "zip": "UEsDBBQAAAAIAEcXXl0Gq5xVIgAAAF8BAAALAAAAY29udGVudC54bWyzyU9Ly0xOtUrJTy7NTc0r0U3OzysB0nYVo4BoYKOPKxQBUEsBAhQDFAAAAAgARxdeXQarnFUiAAAAXwEAAAsAAAAAAAAAAAAAAIABAAAAAGNvbnRlbnQueG1sUEsFBgAAAAABAAEAOQAAAEsAAAAAAA==",
+        "out": null
+      },
+      {
+        "name": "не zip",
+        "zip": "JVBERi0xLjUgbm90IGEgemlwIGF0IGFsbA==",
+        "out": null
+      }
+    ]
+  },
+  "thumbnail_source": {
+    "_": "Откуда миниатюра в строке вложения. server — attachments/thumbnail/{id}/200 (картинки и PDF: Redmine сам рендерит PDF; 404 → значок и не спрашивать снова до перезапуска), embedded — embedded_thumbnail из закэшированного файла (если файла в кэше нет — значок), none — значок типа.",
+    "cases": [
+      {
+        "filename": "shot.PNG",
+        "content_type": "image/png",
+        "source": "server"
+      },
+      {
+        "filename": "scan.pdf",
+        "content_type": "application/pdf",
+        "source": "server"
+      },
+      {
+        "filename": "doc.pdf",
+        "content_type": "application/octet-stream",
+        "source": "server"
+      },
+      {
+        "filename": "сценарий.odt",
+        "content_type": "application/vnd.oasis.opendocument.text",
+        "source": "embedded"
+      },
+      {
+        "filename": "table.ods",
+        "content_type": "",
+        "source": "embedded"
+      },
+      {
+        "filename": "slides.pptx",
+        "content_type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "source": "embedded"
+      },
+      {
+        "filename": "report.docx",
+        "content_type": "application/octet-stream",
+        "source": "embedded"
+      },
+      {
+        "filename": "log.txt",
+        "content_type": "text/plain",
+        "source": "none"
+      },
+      {
+        "filename": "archive.zip",
+        "content_type": "application/zip",
+        "source": "none"
+      }
     ]
   }
 }

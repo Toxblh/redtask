@@ -43,6 +43,8 @@
 | `assignee_filter` | `assigneeOptions(issues, me)` и `filterByAssignee(issues, key, me)` |
 | `board_columns` | `boardColumns(issues, statusOrder)` |
 | `notif_image` | `notificationImage(notes, details, attachments)` |
+| `thumbnail_source` | `thumbnailSource(filename, contentType)` → server / embedded / none |
+| `embedded_thumbnail` | `embeddedThumbnail(bytes)` → байты картинки или null |
 | `wiki_link` | разбор `[[…]]` в Textile |
 
 Имена функций берутся по стилю платформы: `quote_reply` в Vala, `quoteReply` в Kotlin и Swift.
@@ -161,6 +163,33 @@
 - Если превью не скачалось, уведомление уходит без картинки; задерживать уведомление нельзя дольше 10 с.
 - В истории колокольчика у такой записи маленькая миниатюра справа.
 
+## 4.1 Миниатюры вложений
+
+В строке вложения (файлы задачи, файлы комментария, файлы проекта) вместо значка типа показывается миниатюра. Источник выбирает `thumbnailSource(filename, contentType)`, набор `thumbnail_source`:
+
+| Источник | Для каких файлов | Откуда |
+|---|---|---|
+| `server` | картинки и PDF | `attachments/thumbnail/{id}/200`: Redmine сам рендерит первую страницу PDF |
+| `embedded` | ODF (odt, ods, odp, odg) и OOXML (docx, xlsx, pptx) | миниатюра, встроенная в сам документ, **только если файл уже скачан** (открывали раньше) |
+| `none` | всё остальное | значок типа |
+
+- Для `server` запрос идёт, даже если в JSON вложения нет `thumbnail_url`: у файлов комментариев его не бывает. Ответ 404 означает значок, повторно не спрашиваем до перезапуска.
+- Для `embedded` миниатюру достаёт `embeddedThumbnail(bytes)`, набор `embedded_thumbnail`:
+  - zip читается по центральному каталогу, методы stored и deflate;
+  - для ODF берётся `Thumbnails/thumbnail.png`, для OOXML — `docProps/thumbnail.jpeg`, `.jpg` или `.png`;
+  - wmf и emf не показываются.
+  
+  LibreOffice и системные thumbnailer'ы не нужны. Результат кэшируется рядом с файлом.
+- Документы ради миниатюры заранее не скачиваются. Миниатюра появляется после первого открытия документа, в том числе в других задачах с тем же вложением.
+
+Где лежат скачанные файлы:
+
+| Платформа | Каталог |
+|---|---|
+| GNOME | `~/.cache/redmine-adw/open/{id}/` (во flatpak — `~/.var/app/ru.toxblh.RedmineAdw/cache/…`) |
+| Android | `cacheDir/attachments` |
+| iOS | кэш QuickLook-загрузок |
+
 ## 5. Таблица возможностей
 
 ✅ есть · ❌ нет · 🔧 есть, но расходится со спецификацией.
@@ -178,6 +207,8 @@
 | Обзор / Вики / Файлы проекта | ✅ | ✅ | ✅ | 2.2 |
 | Вехи: список, экран, фильтры, доска | ✅ | ✅ | ✅ | 3 |
 | Картинка в уведомлении | ✅ | ✅ | ✅ (иконкой) | 4 |
+| Миниатюры PDF (сервер) для всех вложений | 🔧 только с `thumbnail_url` | 🔧 | 🔧 только с `thumbnail_url` | 4.1 |
+| Встроенные миниатюры документов из кэша | ❌ | ❌ | ❌ | 4.1 |
 | Цвета статусов (одни правила) | ✅ | ✅ | ✅ | `status_kind` |
 
 ### Уже есть не везде (бэклог следующих итераций)
