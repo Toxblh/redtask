@@ -43,18 +43,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         [.list]
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    /// Вариант с completionHandler, а не async: async-вариант система завершает не на главном потоке,
+    /// а UIKit при нажатии на уведомление обновляет снимок сцены и падает на проверке главного потока (SIGABRT).
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping @Sendable () -> Void) {
         let info = response.notification.request.content.userInfo
-        guard let issueId = info["issueId"] as? Int else { return }
+        let issueId = info["issueId"] as? Int
         let note = info["note"] as? Int
         let subject = response.notification.request.content.title
         let action = response.actionIdentifier
-        await MainActor.run {
-            if action == Poller.muteAction {
-                AppModel.shared.settings.mutedIssues[issueId] = subject
-            } else {
-                AppModel.shared.open(issueId, fragment: note.map { "change-\($0)" })
+        Task { @MainActor in
+            if let issueId {
+                if action == Poller.muteAction {
+                    AppModel.shared.settings.mutedIssues[issueId] = subject
+                } else {
+                    AppModel.shared.open(issueId, fragment: note.map { "change-\($0)" })
+                }
             }
+            completionHandler()
         }
     }
 }
