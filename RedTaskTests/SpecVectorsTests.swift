@@ -119,4 +119,14 @@ struct SpecVectorsTests {
             #expect(out == (c["out"] as? String).flatMap { Data(base64Encoded: $0) }, "\(c["name"]!)")
         }
     }
+
+    @Test func tableColumnsCases() {
+        for c in cases("table_columns") {
+            let f = { (k: String) in (c[k] as! [Double]).map { CGFloat($0) } }
+            let out = tableColumns(min: f("min"), max: f("max"), avail: CGFloat(c["avail"] as! Double))
+            let want = f("widths")
+            #expect(out.scroll == c["scroll"] as! Bool && out.widths.count == want.count, "\(c)")
+            #expect(zip(out.widths, want).allSatisfy { abs($0 - $1) < 0.01 }, "\(out.widths) != \(want)")
+        }
+    }
 }

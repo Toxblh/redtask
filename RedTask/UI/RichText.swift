@@ -190,24 +190,45 @@ private struct BlockView: View {
     }
 }
 
-/// Таблица сеткой; шире 4 колонок — прокрутка вбок.
+/// Таблица сеткой. Колонки — по tableColumns (spec 7): замер самого длинного слова и самой длинной ячейки
+/// по исходному тексту, без разметки — с запасом.
+/// ponytail: с объединёнными ячейками (\N.) — как раньше: до 4 колонок поровну, шире — по 160 pt со скроллом.
 private struct TableBlock: View {
     let rows: [[TCell]]
     let ctx: RichContext
+    @State private var avail: CGFloat = 0
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    private static let pad: CGFloat = 16 // padding(.horizontal, 8) ячейки
+
+    private var layout: (widths: [CGFloat], scroll: Bool)? {
+        guard !rows.contains(where: { $0.contains { $0.span > 1 } }) else { return nil }
+        let regular = UIFont.preferredFont(forTextStyle: .body, compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(typeSize)))
+        let bold = UIFont.systemFont(ofSize: regular.pointSize, weight: .semibold)
+        func w(_ t: some StringProtocol, _ header: Bool) -> CGFloat {
+            ceil((String(t) as NSString).size(withAttributes: [.font: header ? bold : regular]).width)
+        }
+        let cols = rows.map(\.count).max() ?? 0
+        func col(_ f: (TCell) -> CGFloat) -> [CGFloat] {
+            (0..<cols).map { j in (rows.compactMap { $0.indices.contains(j) ? f($0[j]) : nil }.max() ?? 0) + Self.pad + 1 }
+        }
+        return tableColumns(min: col { c in c.text.split(separator: " ").map { w($0, c.header) }.max() ?? 0 },
+                            max: col { w($0.text, $0.header) }, avail: avail)
+    }
 
     var body: some View {
-        // До 4 колонок — по ширине экрана; шире — прокрутка вбок с колонками фиксированной ширины
-        // (Grid в горизонтальной прокрутке не учитывает перенос текста в высоте строки).
         // Заливки строк нет: в Grid фон ложится на каждую ячейку по высоте её текста.
-        let wide = (rows.map { $0.reduce(0) { $0 + $1.span } }.max() ?? 0) > 4
+        let layout = layout
+        let wide = layout?.scroll ?? ((rows.map { $0.reduce(0) { $0 + $1.span } }.max() ?? 0) > 4)
         let grid = Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                 if i > 0 { Divider().gridCellUnsizedAxes(.horizontal) }
                 GridRow {
-                    ForEach(Array(row.enumerated()), id: \.offset) { _, cell in
+                    ForEach(Array(row.enumerated()), id: \.offset) { j, cell in
+                        let width: CGFloat? = layout.map { $0.widths[j] - Self.pad } ?? (wide ? 160 * CGFloat(cell.span) : nil)
                         InlineText(lines: [.plain(cell.text)], ctx: ctx, muted: false, bold: cell.header)
-                            .frame(width: wide ? 160 * CGFloat(cell.span) : nil, alignment: .leading)
-                            .frame(maxWidth: wide ? nil : .infinity, alignment: .leading)
+                            .frame(width: width, alignment: .leading)
+                            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
                             .padding(.horizontal, 8).padding(.vertical, 6)
                             .gridCellColumns(cell.span)
                     }
@@ -216,7 +237,11 @@ private struct TableBlock: View {
         }
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(.separator)))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        if wide { ScrollView(.horizontal) { grid } } else { grid }
+        Group {
+            if wide { ScrollView(.horizontal) { grid } } else { grid }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { avail = $0 }
     }
 }
 

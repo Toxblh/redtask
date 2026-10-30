@@ -406,6 +406,15 @@ indirect enum Inline: Equatable, Sendable {
     case styled(InlineStyle, [Inline])
 }
 
+/// Ширины колонок таблицы как в браузере (spec 7, набор table_columns): min — самое длинное слово,
+/// max — самая длинная ячейка; не влезает и по min — колонки по min и прокрутка вбок.
+func tableColumns(min: [CGFloat], max: [CGFloat], avail: CGFloat) -> (widths: [CGFloat], scroll: Bool) {
+    let sumMin = min.reduce(0, +), sumMax = max.reduce(0, +)
+    if sumMin > avail { return (min, true) }
+    if sumMax <= avail { return (max.map { sumMax > 0 ? $0 * avail / sumMax : avail / CGFloat(max.count) }, false) }
+    return (min.indices.map { min[$0] + (avail - sumMin) * (max[$0] - min[$0]) / (sumMax - sumMin) }, false)
+}
+
 /// Содержимое [[…]] → ссылка вики (набор wiki_link).
 func wikiLink(_ target: String, label: String?) -> Inline {
     var page = Substring(target.trimmingCharacters(in: .whitespaces))
