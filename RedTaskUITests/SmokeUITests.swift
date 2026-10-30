@@ -25,7 +25,7 @@ final class SmokeUITests: XCTestCase {
 
     func testTabs() {
         let app = launch()
-        XCTAssertTrue(app.staticTexts["Crash when opening a notification while the app is in the background"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Crash when opening a notification while the app is in the background"].waitForExistence(timeout: 20)) // холодный симулятор iOS 27 грузит дольше
         tab(app, "Watching")
         XCTAssertTrue(app.navigationBars["Watching"].waitForExistence(timeout: 5))
         tab(app, "Favorites")
@@ -74,7 +74,7 @@ final class SmokeUITests: XCTestCase {
     /// Разделы проекта (spec 2.2): каждый открывается и показывает своё.
     func testProjectSections() {
         let app = launch("-RTTab", "projects", "-RTProject", "1")
-        XCTAssertTrue(app.staticTexts["Crash when opening a notification while the app is in the background"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Crash when opening a notification while the app is in the background"].waitForExistence(timeout: 20)) // холодный симулятор iOS 27 грузит дольше
         section(app, "Overview")
         XCTAssertTrue(app.staticTexts["Identifier"].waitForExistence(timeout: 5))
         section(app, "Versions")
@@ -159,6 +159,11 @@ final class SmokeUITests: XCTestCase {
         // содержимое карточки, а не ячейка целиком: у тихого (provisional) уведомления в ячейке ещё «Продолжать/Выключить»
         let note = springboard.buttons
             .matching(NSPredicate(format: "identifier BEGINSWITH 'ShortLook.Platter.Content' AND label CONTAINS '#1240'")).firstMatch
+        // тихие (provisional) уведомления — в истории Центра уведомлений: она открывается свайпом вверх на экране блокировки
+        if !note.waitForExistence(timeout: 5) {
+            springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+                .press(forDuration: 0.1, thenDragTo: springboard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)))
+        }
         XCTAssertTrue(note.waitForExistence(timeout: 10), "уведомления нет в Центре уведомлений")
         shot(springboard, "центр-уведомлений")
         note.tap()
