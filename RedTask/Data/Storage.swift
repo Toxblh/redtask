@@ -155,6 +155,11 @@ enum Files {
         return u
     }
 
+    /// Скачанное вложение: Caches/<учётка>/attachments/<id>/<имя> — переживает перезапуск, вложения неизменны.
+    static func attachment(_ a: Attachment, account: String) -> URL {
+        caches.appending(path: "\(account)/attachments/\(a.id)/\(a.filename.isEmpty ? "file" : a.filename)")
+    }
+
     static func dir(_ base: URL, _ parts: String...) -> URL {
         var u = base
         for p in parts { u.appendPathComponent(p, isDirectory: true) }

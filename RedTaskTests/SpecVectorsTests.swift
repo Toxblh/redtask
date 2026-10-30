@@ -105,4 +105,18 @@ struct SpecVectorsTests {
             #expect(parseInline(c["src"] as! String) == [want])
         }
     }
+
+    @Test func thumbnailSourceCases() {
+        for c in cases("thumbnail_source") {
+            let f = c["filename"] as! String
+            #expect(thumbnailSource(filename: f, contentType: c["content_type"] as? String).rawValue == c["source"] as! String, "\(f)")
+        }
+    }
+
+    @Test func embeddedThumbnailCases() {
+        for c in cases("embedded_thumbnail") {
+            let out = embeddedThumbnail(Data(base64Encoded: c["zip"] as! String)!)
+            #expect(out == (c["out"] as? String).flatMap { Data(base64Encoded: $0) }, "\(c["name"]!)")
+        }
+    }
 }

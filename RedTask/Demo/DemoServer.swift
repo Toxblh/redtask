@@ -587,7 +587,9 @@ private extension DemoDB {
 
         projectFiles[1] = [attach(601, Upload(filename: "app-icon.png", type: "image/png", data: Self.picture(symbol: "app.badge.fill", tint: .systemBlue)), by: 4, ago: 20000),
                            attach(602, Upload(filename: t("release-checklist.txt", "чеклист-выпуска.txt"), type: "text/plain",
-                                              data: Data(t("1. Bump the version\n2. TestFlight\n3. Submit for review\n", "1. Поднять версию\n2. TestFlight\n3. Отправить на проверку\n").utf8)), by: 8, ago: 9000)]
+                                              data: Data(t("1. Bump the version\n2. TestFlight\n3. Submit for review\n", "1. Поднять версию\n2. TestFlight\n3. Отправить на проверку\n").utf8)), by: 8, ago: 9000),
+                           attach(604, Upload(filename: t("roadmap.odt", "план-развития.odt"), type: "application/vnd.oasis.opendocument.text",
+                                              data: Self.odt(thumbnail: Self.picture(symbol: "map.fill", tint: .systemOrange))), by: 2, ago: 15000)]
         projectFiles[3] = [attach(603, Upload(filename: "network-diagram.png", type: "image/png", data: Self.picture(symbol: "network", tint: .systemTeal)), by: 7, ago: 30000)]
         let release = t("Release_process", "Выпуск_версии"), style = t("Code_style", "Стиль_кода"), r15 = t("Release_1.5", "Выпуск_1.5")
         wiki[1] = [
@@ -786,6 +788,31 @@ private extension DemoDB {
                                         "х": "kh", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch", "ы": "y", "э": "e", "ю": "yu", "я": "ya"]
         let s = String(first.lowercased().prefix(1)) + last.lowercased()
         return s.map { map[$0] ?? "" }.joined()
+    }
+
+    /// Документ ODF со встроенной миниатюрой (без текста): строка вложения покажет её после первого открытия.
+    static func odt(thumbnail: Data) -> Data {
+        let mime = "application/vnd.oasis.opendocument.text"
+        let content = #"<?xml version="1.0" encoding="UTF-8"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" office:version="1.2"><office:body><office:text/></office:body></office:document-content>"#
+        return storedZip([("mimetype", Data(mime.utf8)), ("content.xml", Data(content.utf8)), ("Thumbnails/thumbnail.png", thumbnail)])
+    }
+
+    /// Zip без сжатия: локальные заголовки, центральный каталог, конец каталога.
+    static func storedZip(_ entries: [(String, Data)]) -> Data {
+        func le(_ v: Int, _ n: Int) -> [UInt8] { (0..<n).map { UInt8(truncatingIfNeeded: v >> (8 * $0)) } }
+        func crc32(_ d: Data) -> Int {
+            var c: UInt32 = 0xFFFF_FFFF
+            for b in d { c ^= UInt32(b); for _ in 0..<8 { c = c & 1 == 1 ? (c >> 1) ^ 0xEDB8_8320 : c >> 1 } }
+            return Int(~c)
+        }
+        var out = Data(), dir = Data()
+        for (name, d) in entries {
+            let n = Data(name.utf8), common = le(0, 2) + le(0, 2) + le(0, 4) + le(crc32(d), 4) + le(d.count, 4) + le(d.count, 4) + le(n.count, 2) + le(0, 2)
+            dir += le(0x02014b50, 4) + le(20, 2) + le(20, 2) + common + le(0, 6) + le(0, 4) + le(out.count, 4) + n
+            out += le(0x04034b50, 4) + le(20, 2) + common + n + d
+        }
+        let cd = out.count
+        return out + dir + le(0x06054b50, 4) + le(0, 4) + le(entries.count, 2) + le(entries.count, 2) + le(dir.count, 4) + le(cd, 4) + le(0, 2)
     }
 
     /// Картинка-заглушка вложения: «окно приложения» с символом.

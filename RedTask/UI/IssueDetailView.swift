@@ -674,12 +674,16 @@ struct IssueDetailView: View {
 }
 
 /// Вложение (задачи, страницы вики, файл проекта) — скачать с ключом и показать в Quick Look.
+/// Файл остаётся в кэше: повторно не качаем, из него же встроенная миниатюра документа (spec 4.1).
 @MainActor func previewAttachment(_ a: Attachment, api: RedmineAPI) async throws {
-    let data = try await api.download(a.contentUrl)
-    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("att-\(a.id)", isDirectory: true)
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    let file = dir.appendingPathComponent(a.filename.isEmpty ? "file" : a.filename)
-    try data.write(to: file, options: .atomic)
+    let app = AppModel.shared
+    let file = Files.attachment(a, account: app.account)
+    if !FileManager.default.fileExists(atPath: file.path) {
+        let data = try await api.download(a.contentUrl)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: file, options: .atomic)
+        app.downloadsEpoch += 1
+    }
     presentQuickLook(file)
 }
 
@@ -890,9 +894,16 @@ struct AttachmentRow: View {
             }
         }
         .contentShape(Rectangle())
-        .task(id: attachment.id) {
-            guard attachment.isImage || attachment.thumbnailUrl != nil, let api = app.api else { return }
-            thumb = await ImageStore.shared.thumbnail(attachment.id, api: api, account: app.account)
+        .task(id: "\(attachment.id) \(app.downloadsEpoch)") {
+            guard thumb == nil, let api = app.api else { return }
+            switch thumbnailSource(filename: attachment.filename, contentType: attachment.contentType) {
+            case .server: thumb = await ImageStore.shared.thumbnail(attachment.id, api: api, account: app.account)
+            case .embedded:
+                let file = Files.attachment(attachment, account: app.account)
+                guard FileManager.default.fileExists(atPath: file.path) else { return }
+                thumb = await ImageStore.shared.embedded(file, id: attachment.id, account: app.account)
+            case .none: break
+            }
         }
     }
 

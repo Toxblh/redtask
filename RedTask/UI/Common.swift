@@ -75,7 +75,7 @@ actor ImageStore {
     private var mem: [String: UIImage] = [:]
     private var order: [String] = []
     private var misses: [String: Date] = [:]
-    private var inFlight: [String: Task<UIImage?, Never>] = [:]
+    private var inFlight: [String: Task<(UIImage?, final: Bool), Never>] = [:]
 
     private func remember(_ key: String, _ img: UIImage) {
         if mem[key] == nil { order.append(key) }
@@ -88,27 +88,28 @@ actor ImageStore {
 
     func cached(_ key: String) -> UIImage? { mem[key] }
 
-    private func load(_ key: String, account: String, disk: Bool, _ fetch: @escaping @Sendable () async throws -> Data?) async -> UIImage? {
+    /// sticky: определённое «нет» (404, нет миниатюры) не переспрашиваем до перезапуска; сбой — через 10 минут.
+    private func load(_ key: String, account: String, disk: Bool, sticky: Bool = false, _ fetch: @escaping @Sendable () async throws -> Data?) async -> UIImage? {
         if let m = mem[key] { return m }
         if let miss = misses[key], Date().timeIntervalSince(miss) < 600 { return nil }
-        if let t = inFlight[key] { return await t.value }
+        if let t = inFlight[key] { return await t.value.0 }
         let file = Files.dir(Files.caches, account, "images").appendingPathComponent(key.replacingOccurrences(of: "/", with: "_"))
-        let t = Task<UIImage?, Never> {
+        let t = Task<(UIImage?, final: Bool), Never> {
             if disk, let attrs = try? FileManager.default.attributesOfItem(atPath: file.path),
                let mod = attrs[.modificationDate] as? Date, Date().timeIntervalSince(mod) < 86400,
                let d = try? Data(contentsOf: file), let img = UIImage(data: d) {
-                return img
+                return (img, true)
             }
             do {
-                guard let d = try await fetch() else { return nil }
+                guard let d = try await fetch() else { return (nil, true) }
                 if disk { try? d.write(to: file, options: .atomic) }
-                return Self.decode(d)
-            } catch { return nil }
+                return (Self.decode(d), true)
+            } catch { return (nil, false) }
         }
         inFlight[key] = t
-        let img = await t.value
+        let (img, final) = await t.value
         inFlight[key] = nil
-        if let img { remember(key, img) } else { misses[key] = Date() }
+        if let img { remember(key, img) } else { misses[key] = sticky && final ? .distantFuture : Date() }
         return img
     }
 
@@ -125,7 +126,18 @@ actor ImageStore {
     }
 
     func thumbnail(_ attachmentId: Int, api: RedmineAPI, account: String) async -> UIImage? {
-        await load("thumb-\(attachmentId)", account: account, disk: true) { try await api.thumbnail(attachmentId, size: 400) }
+        await load("thumb-\(attachmentId)", account: account, disk: true, sticky: true) { try await api.thumbnail(attachmentId, size: 200) }
+    }
+
+    /// Миниатюра, встроенная в скачанный ODF/OOXML; извлечённая лежит рядом с файлом (.thumbnail).
+    func embedded(_ file: URL, id: Int, account: String) async -> UIImage? {
+        await load("embedded-\(id)", account: account, disk: false, sticky: true) {
+            let side = file.deletingLastPathComponent().appending(path: ".thumbnail")
+            if let d = try? Data(contentsOf: side) { return d }
+            guard let d = try embeddedThumbnail(Data(contentsOf: file, options: .mappedIfSafe)) else { return nil }
+            try? d.write(to: side, options: .atomic)
+            return d
+        }
     }
 
     func image(_ url: String, api: RedmineAPI, account: String) async -> UIImage? {
