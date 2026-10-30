@@ -66,6 +66,7 @@ final class AppModel {
     private func debugLaunch() {
         let d = UserDefaults.standard
         if d.bool(forKey: "RTDemo") { enterDemo() } // и поверх входа: снимки без настоящих данных
+        if d.bool(forKey: "RTBoard") { settings.versionBoard = true }
         if let key = d.string(forKey: "RTKey"), !isLoggedIn {
             let server = d.string(forKey: "RTServer") ?? "https://my.basealt.space"
             Task { try? await login(server: server, key: key) }

@@ -72,6 +72,9 @@ struct SearchView: View {
                                        description: Text("Type text from the subject or description, or an issue number."))
             }
         }
+        #if DEBUG
+        .onAppear { if query.isEmpty, let q = UserDefaults.standard.string(forKey: "RTQuery") { query = q } }
+        #endif
         .task(id: query) {
             try? await Task.sleep(for: .milliseconds(400))
             if !Task.isCancelled { await search() }

@@ -70,6 +70,8 @@ struct IssueDetailView: View {
             }
             .task {
                 #if DEBUG
+                // -RTFeed all|actions|time — вкладка ленты
+                if let f = UserDefaults.standard.string(forKey: "RTFeed").flatMap(ActivityTab.init) { tab = f }
                 switch UserDefaults.standard.string(forKey: "RTDetailSheet") {
                 case "comment":
                     try? await Task.sleep(for: .milliseconds(600))
