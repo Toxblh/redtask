@@ -34,6 +34,8 @@ struct RedTaskApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        // ширина сегмента по подписи: «Комментарии» иначе режется до «Коммент…», когда соседи короткие
+        UISegmentedControl.appearance().apportionsSegmentWidthsByContent = true
         Poller.register()
         return true
     }
