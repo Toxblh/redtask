@@ -13,6 +13,15 @@ enum ProjectSection: String, CaseIterable, Identifiable {
         case .files: "Files"
         }
     }
+    var icon: String {
+        switch self {
+        case .issues: "checklist"
+        case .overview: "info.circle"
+        case .versions: "flag.checkered"
+        case .wiki: "book.closed"
+        case .files: "doc.on.doc"
+        }
+    }
     var module: String? {
         switch self {
         case .issues, .versions: "issue_tracking"
@@ -46,16 +55,7 @@ struct ProjectView: View {
 
     var body: some View {
         let shown = sections.contains(section) ? section : sections.first ?? .overview
-        VStack(spacing: 0) {
-            if sections.count > 1 {
-                Picker("Section", selection: $section) {
-                    ForEach(sections) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-            }
+        Group {
             switch shown {
             case .issues: IssueListView(kind: .project(project.id, project.name), selection: $selection)
             case .overview: ProjectOverview(project: full ?? project)
@@ -64,9 +64,26 @@ struct ProjectView: View {
             case .files: ProjectFiles(project: project) { hidden.insert(.files) }
             }
         }
+        // разделы — меню заголовка, а не сегменты: пять подписей в узкой колонке iPad обрезались,
+        // а на iPhone сегменты разделов стояли стопкой с Открытые/Закрытые/Все под полем поиска (docs/HIG-notes.md)
         .navigationTitle(project.name)
+        .navigationSubtitleIfAvailable(shown.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarTitleMenu {
+            if sections.count > 1 {
+                Picker("Section", selection: $section) {
+                    ForEach(sections) { Label($0.title, systemImage: $0.icon).tag($0) }
+                }
+            }
+        }
         .task { full = try? await app.api?.projectModules(project.id) }
+    }
+}
+
+extension View {
+    /// Подзаголовок навбара — с iOS 26; раньше раздел виден только галочкой в меню заголовка.
+    @ViewBuilder func navigationSubtitleIfAvailable(_ text: LocalizedStringKey) -> some View {
+        if #available(iOS 26, *) { navigationSubtitle(Text(text)) } else { self }
     }
 }
 
