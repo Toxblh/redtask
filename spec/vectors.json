@@ -559,5 +559,164 @@
         "source": "none"
       }
     ]
+  },
+  "demo_server": {
+    "_": "Демо-режим (п. 6): выдуманный Redmine в памяти по адресу base. Один и тот же набор данных на всех платформах: запрос (method, path от base или полный URL) → code; для списков задач — ids по порядку и total; для users/current — login. lang — язык данных (ru — логины транслитом имён). translit — логин из русских имени и фамилии.",
+    "base": "https://redmine.example.com",
+    "translit": [
+      {
+        "first": "Алексей",
+        "last": "Морозов",
+        "login": "amorozov"
+      },
+      {
+        "first": "Екатерина",
+        "last": "Лебедева",
+        "login": "elebedeva"
+      },
+      {
+        "first": "Никита",
+        "last": "Зайцев",
+        "login": "nzaitsev"
+      }
+    ],
+    "requests": [
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/users/current.json",
+        "code": 200,
+        "login": "amorgan"
+      },
+      {
+        "lang": "ru",
+        "method": "GET",
+        "path": "/users/current.json",
+        "code": 200,
+        "login": "amorozov"
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/issues.json?assigned_to_id=me&status_id=open&sort=updated_on:desc&limit=100",
+        "code": 200,
+        "ids": [
+          1240,
+          1230,
+          1238,
+          1236,
+          1222,
+          1239,
+          1228,
+          1225,
+          1233
+        ],
+        "total": 9
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/issues.json?watcher_id=me&status_id=*&sort=updated_on:desc&limit=100",
+        "code": 200,
+        "ids": [
+          1243,
+          1242,
+          1241,
+          1235,
+          1220,
+          1210
+        ],
+        "total": 6
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/issues.json?set_filter=1&f[]=favourite_state&op[favourite_state]==&v[favourite_state][]=x&f[]=status_id&op[status_id]=*&sort=updated_on:desc&limit=100",
+        "code": 200,
+        "ids": [
+          1240,
+          1238,
+          1242
+        ],
+        "total": 3
+      },
+      {
+        "lang": "ru",
+        "method": "GET",
+        "path": "/issues.json?set_filter=1&f[]=notes&op[notes]=~&v[notes][]=@amorozov&status_id=*&sort=updated_on:desc&limit=100",
+        "code": 200,
+        "ids": [
+          1240,
+          1230,
+          1243
+        ],
+        "total": 3
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/issues.json?project_id=infra&status_id=*&sort=id:asc&limit=2",
+        "code": 200,
+        "ids": [
+          1205,
+          1217
+        ],
+        "total": 6
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/projects.json",
+        "code": 200
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/issues/1240.json?include=journals",
+        "code": 200
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/custom_fields.json",
+        "code": 403
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/projects/support/wiki/index.json",
+        "code": 403
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/issues/1240",
+        "code": 404
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/people/1",
+        "code": 404
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/issues.csv?issue_id=1240",
+        "code": 404
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "/rup_cable_zenedit",
+        "code": 404
+      },
+      {
+        "lang": "en",
+        "method": "GET",
+        "path": "https://example.org/issues.json",
+        "code": 404
+      }
+    ]
   }
 }
