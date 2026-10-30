@@ -54,8 +54,8 @@ struct NotificationsView: View {
             .navigationTitle("Notifications")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { SheetConfirmButton("Done") { dismiss() } }
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .cancellationAction) { SheetCloseButton { dismiss() } }
+                ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Picker("View", selection: $app.settings.notifByIssue) {
                             Label("Feed", systemImage: "list.bullet").tag(false)
@@ -286,7 +286,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { SheetConfirmButton("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { SheetCloseButton { dismiss() } } }
             .confirmationDialog("Sign out?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button("Sign Out", role: .destructive) { dismiss(); app.logout() }
             }

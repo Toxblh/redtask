@@ -229,6 +229,14 @@ func statusTint(_ s: IssueStatus) -> Color {
     }
 }
 
+/// Цветная точка статуса для меню и пикеров (spec 0): в системное меню цвет SwiftUI не доходит — картинка alwaysOriginal.
+func statusDot(_ s: IssueStatus) -> Image {
+    Image(uiImage: UIImage(systemName: "circle.fill")!.withTintColor(UIColor(statusTint(s)), renderingMode: .alwaysOriginal))
+}
+
+/// Пункт меню или пикера статуса: точка цвета + название.
+func statusLabel(_ s: IssueStatus) -> some View { Label { Text(s.name) } icon: { statusDot(s) } }
+
 /// Копирование в буфер с тактильным откликом.
 @MainActor func copyToPasteboard(_ s: String) {
     UIPasteboard.general.string = s
@@ -265,6 +273,16 @@ struct SheetCancelButton: View {
     init(_ action: @escaping () -> Void) { self.action = action }
     var body: some View {
         if #available(iOS 26, *) { Button(role: .cancel, action: action) } else { Button("Cancel", action: action) }
+    }
+}
+
+/// Лист только для просмотра (колокольчик, настройки, профиль, выделение текста): «Закрыть», а не одинокое «Готово» —
+/// HIG Sheets (март 2026): Done всегда в паре с Cancel; Toolbars: стандартная кнопка Close у модального окна.
+struct SheetCloseButton: View {
+    let action: () -> Void
+    init(_ action: @escaping () -> Void) { self.action = action }
+    var body: some View {
+        if #available(iOS 26, *) { Button(role: .close, action: action) } else { Button("Done", action: action) }
     }
 }
 

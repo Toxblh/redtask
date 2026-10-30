@@ -202,16 +202,23 @@ struct IssueDetailView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private func trackerLine(_ issue: Issue, _ layout: some Layout) -> some View {
+        layout {
+            Text(issue.tracker.name) + Text(verbatim: " ·")
+            Text(issue.project.name)
+            if issue.isPrivate {
+                Label("Private", systemImage: "lock.fill").labelStyle(.titleAndIcon)
+            }
+        }
+    }
+
     @ViewBuilder
     private func header(_ issue: Issue) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Text(issue.tracker.name)
-                Text(verbatim: "·")
-                Text(issue.project.name).lineLimit(1)
-                if issue.isPrivate {
-                    Label("Private", systemImage: "lock.fill").labelStyle(.titleAndIcon)
-                }
+            // крупный шрифт: строка переносится, а не обрезает проект («Мобильн…»)
+            ViewThatFits(in: .horizontal) {
+                trackerLine(issue, HStackLayout(spacing: 6))
+                trackerLine(issue, VStackLayout(alignment: .leading, spacing: 2))
             }
             .font(.subheadline)
             .foregroundStyle(.secondary)
@@ -244,7 +251,7 @@ struct IssueDetailView: View {
             if model.perms.editIssue(issue, me: me), let statuses = issue.allowedStatuses, !statuses.isEmpty {
                 Menu {
                     Picker("Status", selection: Binding(get: { issue.status.id }, set: { id in Task { await model.setStatus(id, app) } })) {
-                        ForEach(statuses) { Text($0.name).tag($0.id) }
+                        ForEach(statuses) { statusLabel($0).tag($0.id) }
                     }
                 } label: {
                     // сам статус виден капсулой в шапке, здесь — только смена
@@ -746,6 +753,7 @@ struct RelatedLine: View {
             .font(.caption)
             Text(issue?.subject ?? subject)
                 .strikethrough(issue?.status.isClosed == true, color: .secondary)
+                .foregroundStyle(issue?.status.isClosed == true ? .secondary : .primary)
                 .lineLimit(2)
         }
     }
@@ -802,7 +810,7 @@ struct ActionRow: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: icon).foregroundStyle(.secondary).frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
-                Text(description)
+                (statusChange ?? Text(description))
                     .font(.subheadline)
                 Text("\(journal.user?.name ?? "—") · \(Fmt.dateTime(journal.createdOn))")
                     .font(.caption).foregroundStyle(.secondary)
@@ -823,6 +831,19 @@ struct ActionRow: View {
         case (_, "done_ratio"): "chart.bar"
         default: "pencil"
         }
+    }
+
+    /// «Статус: было → стало» — оба значения цветом статуса (spec 0).
+    private var statusChange: Text? {
+        guard detail.property == "attr", detail.name == "status_id" else { return nil }
+        func status(_ v: String?) -> Text? {
+            guard let v, !v.isEmpty else { return nil }
+            guard let id = Int(v), let s = names.statusById[id] else { return Text(names.resolve("status_id", v)) }
+            return Text(s.name).foregroundStyle(statusTint(s)).fontWeight(.semibold)
+        }
+        let new = status(detail.newValue) ?? Text(verbatim: "—")
+        let head = Text(verbatim: "\(names.label(detail)): ")
+        return status(detail.oldValue).map { head + $0 + Text(verbatim: " → ") + new } ?? head + new
     }
 
     private var description: String {

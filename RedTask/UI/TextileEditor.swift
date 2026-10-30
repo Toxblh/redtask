@@ -225,8 +225,11 @@ struct IssuePicker: View {
                     dismiss()
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: "#\(i.id) · \(i.status.name)").font(.caption).foregroundStyle(.secondary)
-                        Text(i.subject).lineLimit(2)
+                        HStack(spacing: 6) {
+                            StatusPill(status: i.status, compact: true)
+                            Text(verbatim: "#\(i.id)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Text(i.subject).lineLimit(2).strikethrough(i.status.isClosed, color: .secondary)
                         if exclude.contains(i.id) { Text("already related").font(.caption).foregroundStyle(.orange) }
                     }
                 }

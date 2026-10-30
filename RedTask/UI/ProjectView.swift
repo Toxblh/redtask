@@ -119,7 +119,7 @@ private struct ProjectOverview: View {
                     RichText(text: d, context: RichContext(baseURL: app.api?.baseURL)).padding(.vertical, 4)
                 }
                 if let h = project.homepage, !h.isEmpty, let url = URL(string: h) {
-                    LabeledContent("Homepage") { Link(h, destination: url).lineLimit(1) }
+                    LabeledContent("Homepage") { Link(h, destination: url).lineLimit(1).truncationMode(.middle) }
                 }
                 if let parent = project.parent { LabeledContent("Parent project", value: parent.name) }
                 LabeledContent("Identifier", value: project.identifier)
@@ -390,7 +390,11 @@ private struct BoardCard: View {
     let issue: Issue
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(verbatim: "\(issue.tracker.name) #\(issue.id)").font(.caption).foregroundStyle(.secondary)
+            // статус — цветом и на карточке (spec 0), название — в заголовке колонки
+            HStack(spacing: 5) {
+                Circle().fill(statusTint(issue.status)).frame(width: 7, height: 7)
+                Text(verbatim: "\(issue.tracker.name) #\(issue.id)").font(.caption).foregroundStyle(.secondary)
+            }
             Text(issue.subject).font(.subheadline.weight(.medium)).lineLimit(3)
                 .strikethrough(issue.status.isClosed, color: .secondary)
             HStack(spacing: 6) {

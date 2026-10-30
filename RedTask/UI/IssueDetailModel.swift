@@ -12,6 +12,8 @@ struct PickedFile: Identifiable, Hashable, Sendable {
 /// Сырые id из журнала → имена.
 struct FieldNames {
     var statuses: [Int: String] = [:]
+    /// Статусы целиком — для цвета в записи «Статус: было → стало».
+    var statusById: [Int: IssueStatus] = [:]
     var priorities: [Int: String] = [:]
     var trackers: [Int: String] = [:]
     var users: [Int: String] = [:]
@@ -150,7 +152,10 @@ final class IssueDetailModel {
         let perms = await p
         self.perms = IssuePerms(known: true, set: perms)
         var n = names
-        if let s = await st { n.statuses = Dictionary(s.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a }) }
+        if let s = await st {
+            n.statuses = Dictionary(s.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+            n.statusById = Dictionary(s.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        }
         if let s = await pr { priorities = s; n.priorities = Dictionary(s.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a }) }
         if let s = await tr { n.trackers = Dictionary(s.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a }) }
         if let s = await ver { n.versions = Dictionary(s.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a }) }

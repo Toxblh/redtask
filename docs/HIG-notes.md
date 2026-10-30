@@ -99,3 +99,58 @@ App Store Review Guidelines (2.1, 2.3, 4.2, 5.1.1, 5.1.2), документац�
   сервер пользователя, разработчику ничего не уходит); Required Reason API — `UserDefaults` (CA92.1).
 - **ITSAppUsesNonExemptEncryption = NO**: только HTTPS системного URLSession (освобождено).
 - Нет сторонних SDK, аналитики и рекламы.
+
+## Сверка с HIG 30 октября 2026 (iOS 26.5 / 27.0)
+
+Страницы перечитаны с developer.apple.com (JSON страниц HIG): segmented-controls, toolbars (с июня 2025 сюда
+влита страница navigation-bars, отдельной больше нет), menus, context-menus, sidebars, split-views, tab-bars,
+lists-and-tables, sheets, search-fields, notifications, pop-up-buttons, pull-down-buttons. Новое с прошлой сверки:
+
+- **Sheets (24 марта 2026, «Updated guidance for button placement»):** «Provide an alternative to the Done
+  button. If you provide a Done button, always pair it with a Cancel button … or a Back button». Cancel/Close —
+  ведущий край, Done — замыкающий. → Листы только для просмотра (колокольчик, настройки, профиль, «Выделить
+  текст») закрываются системной кнопкой Close (`Button(role: .close)`, ✕ слева), а не одиноким «Готово».
+  Toolbars: «Use the standard Back and Close buttons … Prefer the standard symbols». Меню вида колокольчика
+  переехало направо (`.primaryAction`), чтобы слева была только ✕.
+- **Menus (8 июня 2026, иконки пунктов):** «Use menu item icons sparingly and with purpose» и «provide icons for
+  all menu items in a group, or none of them». Наши меню (комментарий, задача, проект, разделы проекта) — с
+  иконками у всех пунктов группы; стандартные символы Copy/Share/Delete.
+- **Tab bars (8 июня 2026, терминология), Sidebars (8 июня 2026):** без изменений для нас — таб-бар
+  `.sidebarAdaptable`, пять вкладок, поиск — отдельная вкладка в конце.
+- **Search fields (8 июня 2026, «search as a tab in iOS»):** поиск-вкладка в виде кнопки — «brings focus to the
+  search field and displays the keyboard … ideal when you want search to resolve quickly». Так и есть.
+  Inline-поиск в списке: «position an inline search field above the list it searches». На экране проекта
+  поле «Искать в этом списке» теперь стоит над фильтром Открытые/Закрытые/Все только в разделе «Задачи»,
+  а не над переключателем разделов (раньше казалось, что ищет по всему проекту).
+- **Toolbars (16 декабря 2025, Liquid Glass):** «Minimize the number of groups … aim for a maximum of three»,
+  «keep the title under 15 characters», «Next to the title, the toolbar can include a document menu that contains
+  … commands that affect the document as a whole». Заголовок с меню у нас — как раз это место.
+
+### Разделы проекта: меню заголовка вместо сегментов
+Было: сегменты «Задачи · Обзор · Вехи · Вики · Файлы» под навбаром. На iPad в средней колонке подписи
+обрезались («Over…», «Versi…», по-русски «Зад…», «Фай…»), на iPhone стояли две полосы сегментов подряд
+(разделы + Открытые/Закрытые/Все), а поле поиска задач — над обеими.
+
+Почему так нельзя по HIG:
+- Segmented controls: «Limit the number of segments … no more than about five segments on iPhone»; «As much as
+  possible, use content with a similar size in each segment» — пять подписей разной длины, по-русски длиннее,
+  в колонке 320 pt не помещаются; обрезанный сегмент — не читаемая подпись.
+- Segmented controls → iOS: «Consider a segmented control to switch between closely related subviews» — это
+  вторая полоса (Открытые/Закрытые/Все — одно и то же представление списка), а разделы проекта — разные экраны.
+- Toolbars → Item groupings: рядом с заголовком — «document menu that contains … commands that affect the
+  document as a whole»; Pop-up buttons: «Use a pop-up button to present a flat list of mutually exclusive
+  options … Consider using a pop-up button when space is limited and you don't need to display all options all
+  the time».
+
+Стало: `toolbarTitleMenu` с `Picker` разделов (иконка + название у каждого пункта, галочка у текущего) —
+заголовок «Мобильное приложение ▾», под ним подзаголовок с текущим разделом (`navigationSubtitle`, iOS 26).
+Меню — плоский список взаимоисключающих вариантов, подписи никогда не обрезаются (меню само по ширине),
+одна строка сегментов на экране — только фильтр статуса задач. Скрытые модули (выключены или 403) в меню
+не попадают, как и раньше не попадали в сегменты. iOS 18: подзаголовка нет, раздел виден галочкой в меню.
+
+### Статус задачи всегда цветной (spec 0)
+Везде, где виден статус, он окрашен по виду (`IssueStatus.kind` → `statusTint`): капсула `StatusPill`
+в строках, шапке, на доске; цветной текст в подзадачах и связях; цветная точка в меню и пикерах смены статуса
+(в системное меню цвет SwiftUI не доходит — картинка `alwaysOriginal`); оба значения в записи
+«Статус: было → стало»; капсула в выдаче поиска (статус разбирается из заголовка search.json). Цвет не
+единственный признак: название статуса написано всегда, закрытые ещё и зачёркнуты и приглушены.

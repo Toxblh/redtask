@@ -33,9 +33,20 @@ struct SearchView: View {
                 Section {
                     ForEach(results) { r in
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(r.title).font(.headline).lineLimit(3)
+                            if let p = r.issueParts {
+                                HStack(spacing: 6) {
+                                    StatusPill(status: p.status, compact: true)
+                                    Text(p.head).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                                Text(p.subject).font(.headline).lineLimit(3)
+                                    .strikethrough(p.status.isClosed, color: .secondary)
+                                    .foregroundStyle(p.status.isClosed ? .secondary : .primary)
+                            } else {
+                                Text(r.title).font(.headline).lineLimit(3)
+                            }
                             if !r.description.isEmpty {
-                                Text(r.description).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                                // в выдаче описание — сырой Textile («h2. …»), показываем как текст
+                                Text(notePreview(r.description)).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
                             }
                             Text(Fmt.relative(r.datetime)).font(.caption).foregroundStyle(.secondary)
                         }

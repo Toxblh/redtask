@@ -384,9 +384,13 @@ struct IssueRow: View {
                 }
                 if !ax { Spacer(minLength: 4) }
                 if showAssignee, let a = issue.assignedTo {
-                    HStack(spacing: 6) {
-                        Text(a.name).lineLimit(1).foregroundStyle(.secondary)
-                        Avatar(name: a.name, userId: a.id, size: 24)
+                    // узкая колонка (iPad, русский) — только аватар, без огрызка «Алекс…»
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) {
+                            Text(a.name).lineLimit(1).fixedSize().foregroundStyle(.secondary)
+                            Avatar(name: a.name, userId: a.id, size: 24)
+                        }
+                        Avatar(name: a.name, userId: a.id, size: 24).accessibilityRepresentation { Text(a.name) }
                     }
                 }
             }

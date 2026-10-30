@@ -140,7 +140,7 @@ struct EditIssueView: View {
                         Picker("Tracker", selection: $trackerId) { ForEach(trackers) { Text($0.name).tag($0.id) } }
                     }
                     if let st = issue.allowedStatuses, !st.isEmpty {
-                        Picker("Status", selection: $statusId) { ForEach(st) { Text($0.name).tag($0.id) } }
+                        Picker("Status", selection: $statusId) { ForEach(st) { statusLabel($0).tag($0.id) } }
                     }
                     if !priorities.isEmpty {
                         Picker("Priority", selection: $priorityId) { ForEach(priorities) { Text($0.name).tag($0.id) } }

@@ -361,7 +361,7 @@ private struct PersonPage: View {
         }
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar { if root { ToolbarItem(placement: .confirmationAction) { SheetConfirmButton("Done") { dismiss() } } } }
+        .toolbar { if root { ToolbarItem(placement: .cancellationAction) { SheetCloseButton { dismiss() } } } }
         .task {
             guard let refs = app.refs else { return }
             do { person = try await refs.person(userId) } catch { self.error = error.localizedDescription }
@@ -388,7 +388,7 @@ struct SelectTextSheet: View {
                 .ignoresSafeArea(edges: .bottom)
                 .navigationTitle("Select text")
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { SheetConfirmButton("Done") { dismiss() } } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { SheetCloseButton { dismiss() } } }
         }
     }
 }

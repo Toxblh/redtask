@@ -355,6 +355,17 @@ struct SearchResult: Codable, Sendable, Hashable, Identifiable {
     @D var datetime: String
 }
 
+extension SearchResult {
+    /// «Ошибка #123 (В работе): тема» → «Ошибка #123», статус, тема; у задачи в выдаче поиска статус — только в заголовке.
+    var issueParts: (head: String, status: IssueStatus, subject: String)? {
+        guard type.hasPrefix("issue"), let m = title.firstMatch(of: /^(.*?#\d+) \((.+?)\): (.*)$/) else { return nil }
+        var st = IssueStatus(id: 0, name: D(), isClosed: D())
+        st.name = String(m.2)
+        st.isClosed = type == "issue-closed"
+        return (String(m.1), st, String(m.3))
+    }
+}
+
 struct WikiParent: Codable, Sendable, Hashable { @D var title: String }
 
 struct WikiPageInfo: Codable, Sendable, Hashable, Identifiable {
