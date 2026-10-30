@@ -25,7 +25,9 @@ final class SmokeUITests: XCTestCase {
 
     func testTabs() {
         let app = launch()
-        XCTAssertTrue(app.staticTexts["Crash when opening a notification while the app is in the background"].waitForExistence(timeout: 20)) // холодный симулятор iOS 27 грузит дольше
+        // по вхождению в любой элемент: в iOS 27 строка списка — один элемент доступности с общей подписью
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Crash when opening a notification'")).firstMatch
+            .waitForExistence(timeout: 20))
         tab(app, "Watching")
         XCTAssertTrue(app.navigationBars["Watching"].waitForExistence(timeout: 5))
         tab(app, "Favorites")
@@ -74,7 +76,9 @@ final class SmokeUITests: XCTestCase {
     /// Разделы проекта (spec 2.2): каждый открывается и показывает своё.
     func testProjectSections() {
         let app = launch("-RTTab", "projects", "-RTProject", "1")
-        XCTAssertTrue(app.staticTexts["Crash when opening a notification while the app is in the background"].waitForExistence(timeout: 20)) // холодный симулятор iOS 27 грузит дольше
+        // по вхождению в любой элемент: в iOS 27 строка списка — один элемент доступности с общей подписью
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Crash when opening a notification'")).firstMatch
+            .waitForExistence(timeout: 20))
         section(app, "Overview")
         XCTAssertTrue(app.staticTexts["Identifier"].waitForExistence(timeout: 5))
         section(app, "Versions")
