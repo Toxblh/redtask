@@ -46,6 +46,18 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         BUNDLE_LOADER: $(TEST_HOST)
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/RedTask.app/RedTask
+  RedTaskUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: RedTaskUITests
+    dependencies:
+      - target: RedTask
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.toxblh.RedTaskUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: RedTask
 schemes:
   RedTask:
     build:
@@ -55,3 +67,12 @@ schemes:
     test:
       targets:
         - RedTaskTests
+  # UI-тесты отдельной схемой: tools/build.sh test их не гоняет (медленные), tools/build.sh uitest — только их
+  RedTaskUI:
+    build:
+      targets:
+        RedTask: all
+        RedTaskUITests: [test]
+    test:
+      targets:
+        - RedTaskUITests

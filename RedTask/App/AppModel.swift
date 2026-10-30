@@ -62,7 +62,7 @@ final class AppModel {
     }
 
     #if DEBUG
-    /// Отладочный запуск из simctl: -RTKey <ключ> [-RTServer url] [-RTIssue id] [-RTNote id].
+    /// Отладочный запуск из simctl: -RTKey <ключ> [-RTServer url] [-RTIssue id] [-RTNote id] [-RTNotify id].
     private func debugLaunch() {
         let d = UserDefaults.standard
         if d.bool(forKey: "RTDemo") { enterDemo() } // и поверх входа: снимки без настоящих данных
@@ -73,6 +73,11 @@ final class AppModel {
         if d.integer(forKey: "RTIssue") > 0 {
             let id = d.integer(forKey: "RTIssue"), note = d.integer(forKey: "RTNote")
             Task { try? await Task.sleep(for: .seconds(2)); open(id, fragment: note > 0 ? "change-\(note)" : nil) }
+        }
+        // -RTNotify <id>: через 3 с — системное уведомление о задаче (в демо тоже)
+        if d.integer(forKey: "RTNotify") > 0 {
+            let id = d.integer(forKey: "RTNotify")
+            Task { try? await Task.sleep(for: .seconds(3)); await Poller.debugNotify(id) }
         }
     }
     #endif

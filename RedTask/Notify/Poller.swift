@@ -425,9 +425,9 @@ enum Poller {
      По уведомлению на задачу за опрос: строки событий (новые сверху), стопка по задаче (threadIdentifier).
      Тап ведёт к самому новому журналу. «Мне» и обсуждение — обычные, остальное — тихие (passive).
      */
-    static func post(_ fresh: [NotifEntry]) async {
-        // демо — только колокольчик, системных уведомлений о выдуманных задачах не шлём
-        guard !fresh.isEmpty, !AppModel.shared.isDemo else { return }
+    static func post(_ fresh: [NotifEntry], evenInDemo: Bool = false) async {
+        // демо — только колокольчик, системных уведомлений о выдуманных задачах не шлём (кроме -RTNotify)
+        guard !fresh.isEmpty, evenInDemo || !AppModel.shared.isDemo else { return }
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
@@ -457,4 +457,18 @@ enum Poller {
             try? await center.add(UNNotificationRequest(identifier: "issue-\(issueId)-\(last.key)", content: c, trigger: nil))
         }
     }
+    #if DEBUG
+    /// -RTNotify <id>: уведомление о задаче обычным путём post, и в демо — для UI-теста нажатия на уведомление.
+    static func debugNotify(_ issueId: Int) async {
+        guard let api = AppModel.shared.api, let issue = try? await api.issueJournals(issueId) else { return }
+        await requestProvisional()
+        let j = issue.journals.last { !($0.notes ?? "").isEmpty }
+        let who = j?.user ?? issue.author
+        let e = NotifEntry(issueId: issue.id, subject: issue.subject, project: issue.project.name,
+                           lines: ["\(who.name): \(notePreview(j?.notes ?? ""))"], at: Int64(Date().timeIntervalSince1970 * 1000),
+                           avatarUserId: who.id, type: NotifType.comment, eventId: j.map { "j\($0.id)" } ?? "debug",
+                           projectId: issue.project.id, author: who.name)
+        await post([e], evenInDemo: true)
+    }
+    #endif
 }
