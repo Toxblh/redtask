@@ -4,7 +4,7 @@ import WebKit
 /// Вход: основной путь — «Войти через сайт», ручной ключ — запасная дверь.
 struct LoginView: View {
     @Environment(AppModel.self) private var app
-    @AppStorage("lastServer") private var server = "https://my.basealt.space"
+    @AppStorage("lastServer") private var server = ""
     @State private var key = ""
     @State private var manual = false
     @State private var busy = false
@@ -28,7 +28,7 @@ struct LoginView: View {
                     .padding(.vertical, 8)
                 }
                 Section {
-                    TextField("Server address", text: $server)
+                    TextField("Server address", text: $server, prompt: Text(verbatim: "redmine.example.com"))
                         .keyboardType(.URL)
                         .textContentType(.URL)
                         .textInputAutocapitalization(.never)
@@ -43,6 +43,7 @@ struct LoginView: View {
                         Label("Sign in via website", systemImage: "safari")
                             .frame(maxWidth: .infinity)
                     }
+                    .disabled(server.trimmingCharacters(in: .whitespaces).isEmpty)
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .listRowInsets(EdgeInsets())
