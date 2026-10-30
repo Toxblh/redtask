@@ -2,6 +2,14 @@ import Foundation
 import BackgroundTasks
 import UserNotifications
 import UIKit
+import Intents
+
+/// Флаг «первый раз» для гонки в Poller.before.
+private final class Once: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    func first() -> Bool { lock.withLock { defer { done = true }; return !done } }
+}
 
 /// Необязательный запрос (справочник, имя): сбой — «не знаем».
 private func soft<T>(_ block: () async throws -> T) async -> T? {
@@ -380,20 +388,54 @@ enum Poller {
         }
     }
 
-    /// Превью вложения (thumbnail 400) во временный JPEG — не дольше 10 с.
-    private static func thumbnailFile(_ id: Int, api: RedmineAPI) async -> URL? {
-        let data = await withTaskGroup(of: Data?.self) { g in
-            g.addTask { try? await api.thumbnail(id, size: 400) }
-            g.addTask { try? await Task.sleep(for: .seconds(10)); return nil }
-            let first = await g.next() ?? nil
-            g.cancelAll()
-            return first
-        }
+    /// Превью вложения (thumbnail 400) во временный JPEG.
+    nonisolated private static func thumbnailFile(_ id: Int, api: RedmineAPI) async -> URL? {
         // перекодируем в JPEG: системе нужен узнаваемый тип файла
-        guard let data, let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.85) else { return nil }
+        guard let data = try? await api.thumbnail(id, size: 400), let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.85) else { return nil }
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("notif-\(id)-\(UUID().uuidString).jpg")
         do { try jpeg.write(to: file) } catch { return nil }
         return file
+    }
+
+    /// Результат op, если он успел до deadline, иначе nil. Не дождавшийся op досчитается в фоне (кэш аватара пригодится).
+    nonisolated static func before<T: Sendable>(_ deadline: ContinuousClock.Instant, _ op: @escaping @Sendable () async -> T?) async -> T? {
+        let once = Once()
+        return await withCheckedContinuation { (k: CheckedContinuation<T?, Never>) in
+            Task { let v = await op(); if once.first() { k.resume(returning: v) } }
+            Task { try? await Task.sleep(until: deadline); if once.first() { k.resume(returning: nil) } }
+        }
+    }
+
+    /**
+     Communication Notification (spec 4.2): автор события — отправитель INSendMessageIntent с аватаром,
+     система рисует аватар слева и значок приложения в углу. Беседа — задача: имя группы = заголовок
+     уведомления, иначе система заменила бы «#номер тема» именем автора.
+     */
+    nonisolated static func messageIntent(title: String, body: String, author: String, userId: Int, issueId: Int, avatar: Data?) -> INSendMessageIntent {
+        let sender = INPerson(personHandle: INPersonHandle(value: "user-\(userId)", type: .unknown), nameComponents: nil,
+                              displayName: author, image: avatar.map { INImage(imageData: $0) }, contactIdentifier: nil, customIdentifier: "user-\(userId)")
+        // получателей двое (я и автор) — система показывает имя группы, а не только отправителя
+        let me = INPerson(personHandle: INPersonHandle(value: "me", type: .unknown), nameComponents: nil, displayName: nil,
+                          image: nil, contactIdentifier: nil, customIdentifier: nil, isMe: true)
+        let intent = INSendMessageIntent(recipients: [me, sender], outgoingMessageType: .outgoingMessageText, content: body,
+                                         speakableGroupName: INSpeakableString(spokenPhrase: title), conversationIdentifier: "issue-\(issueId)",
+                                         serviceName: nil, sender: sender, attachments: nil)
+        if let avatar { intent.setImage(INImage(imageData: avatar), forParameterNamed: \.sender) }
+        return intent
+    }
+
+    /// Содержимое с аватаром автора; любой сбой (нет права Communication Notifications и т. п.) — прежнее содержимое.
+    private static func withSender(_ c: UNMutableNotificationContent, author: String, userId: Int, issueId: Int, avatar: UIImage) async -> UNNotificationContent {
+        guard let png = avatar.pngData() else { return c }
+        let intent = messageIntent(title: c.title, body: c.body, author: author, userId: userId, issueId: issueId, avatar: png)
+        let interaction = INInteraction(intent: intent, response: nil)
+        interaction.direction = .incoming
+        do {
+            try await interaction.donate()
+            return try c.updating(from: intent)
+        } catch {
+            return c
+        }
     }
 
     private static var backfilling = false
@@ -448,15 +490,30 @@ enum Poller {
             if let note = list.compactMap(\.journalId).last { info["note"] = note }
             c.userInfo = info
             c.targetContentIdentifier = "issue-\(issueId)"
-            // картинка — из самого свежего комментария; не скачалась за 10 с — уведомление без неё
+            // картинка — из самого свежего комментария, аватар — автора самого свежего события (spec 4, 4.2);
+            // оба качаются параллельно в общий бюджет 10 с, не успели — уведомление без них
             let comment = list.last { $0.types.contains(NotifType.comment) || $0.types.contains(NotifType.privateNote) }
-            if let id = comment?.imageId, let api = AppModel.shared.api, let file = await thumbnailFile(id, api: api),
-               let a = try? UNNotificationAttachment(identifier: "image", url: file) {
+            let deadline = ContinuousClock.now + .seconds(10)
+            let api = AppModel.shared.api, account = AppModel.shared.account
+            async let file: URL? = { () async -> URL? in
+                guard let id = comment?.imageId, let api else { return nil }
+                return await before(deadline) { await thumbnailFile(id, api: api) }
+            }()
+            async let avatar: UIImage? = { () async -> UIImage? in
+                guard let uid = last.avatarUserId, let api else { return nil }
+                return await before(deadline) { await ImageStore.shared.avatar(uid, api: api, account: account) }
+            }()
+            if let file = await file, let a = try? UNNotificationAttachment(identifier: "image", url: file) {
                 c.attachments = [a]
             }
-            try? await center.add(UNNotificationRequest(identifier: "issue-\(issueId)-\(last.key)", content: c, trigger: nil))
+            var content: UNNotificationContent = c
+            if let img = await avatar, let uid = last.avatarUserId {
+                content = await withSender(c, author: last.authorName, userId: uid, issueId: issueId, avatar: img)
+            }
+            try? await center.add(UNNotificationRequest(identifier: "issue-\(issueId)-\(last.key)", content: content, trigger: nil))
         }
     }
+
     #if DEBUG
     /// -RTNotify <id>: уведомление о задаче обычным путём post, и в демо — для UI-теста нажатия на уведомление.
     static func debugNotify(_ issueId: Int) async {
@@ -468,6 +525,15 @@ enum Poller {
                            lines: ["\(who.name): \(notePreview(j?.notes ?? ""))"], at: Int64(Date().timeIntervalSince1970 * 1000),
                            avatarUserId: who.id, type: NotifType.comment, eventId: j.map { "j\($0.id)" } ?? "debug",
                            projectId: issue.project.id, author: who.name)
+        if AppModel.shared.isDemo {
+            let img = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 120)).image { ctx in
+                UIColor.systemTeal.setFill()
+                ctx.fill(CGRect(x: 0, y: 0, width: 120, height: 120))
+                (Avatar.initials(who.name) as NSString).draw(at: CGPoint(x: 24, y: 30), withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 48, weight: .semibold), .foregroundColor: UIColor.white])
+            }
+            await ImageStore.shared.seedAvatar(who.id, img)
+        }
         await post([e], evenInDemo: true)
     }
     #endif

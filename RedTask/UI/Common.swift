@@ -87,6 +87,10 @@ actor ImageStore {
     func clear() { mem = [:]; order = []; misses = [:] }
 
     func cached(_ key: String) -> UIImage? { mem[key] }
+    #if DEBUG
+    /// Подложить аватар (в демо их нет): -RTNotify показывает Communication Notification с картинкой.
+    func seedAvatar(_ userId: Int, _ img: UIImage) { remember("avatar-\(userId)", img) }
+    #endif
 
     /// sticky: определённое «нет» (404, нет миниатюры) не переспрашиваем до перезапуска; сбой — через 10 минут.
     private func load(_ key: String, account: String, disk: Bool, sticky: Bool = false, _ fetch: @escaping @Sendable () async throws -> Data?) async -> UIImage? {
