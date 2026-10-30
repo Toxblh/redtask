@@ -142,6 +142,17 @@ struct RootView: View {
             .onChange(of: project) { page = nil }
             .onChange(of: app.openRequest) { _, r in handle(r) }
             .onAppear { handle(app.openRequest) }
+            #if DEBUG
+            // -RTProject <id> [-RTVersion <id>] — снимки экранов проекта и вехи
+            .task {
+                let d = UserDefaults.standard, pid = d.integer(forKey: "RTProject")
+                guard projects, pid > 0, let api = app.api, let p = try? await api.projects().first(where: { $0.id == pid }) else { return }
+                project = p
+                let vid = d.integer(forKey: "RTVersion")
+                try? await Task.sleep(for: .milliseconds(500))  // onChange(of: project) сбрасывает page
+                if vid > 0, let v = try? await api.versions(pid).first(where: { $0.id == vid }) { page = .version(v) }
+            }
+            #endif
         }
 
         @State private var pendingNoteIssue: Int?

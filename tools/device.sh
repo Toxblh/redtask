@@ -5,7 +5,7 @@ set -e
 MAC=toxblh@192.168.5.97
 DEV=${1:-00008110-001525563E84801E}
 rsync -a --delete --exclude .git --exclude build --exclude '*.xcodeproj' --exclude shots --exclude .build ~/git/redtask/ $MAC:git/redtask/
-ssh -o ControlPath=none $MAC "zsh -lc '
+ssh $MAC "zsh -lc '
   set -e
   read -r PW; security unlock-keychain -p \"\$PW\" ~/Library/Keychains/login.keychain-db
   cd ~/git/redtask && xcodegen generate -q >/dev/null && mkdir -p build

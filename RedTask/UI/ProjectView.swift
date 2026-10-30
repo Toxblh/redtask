@@ -283,11 +283,12 @@ struct VersionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Picker("View", selection: $app.settings.versionBoard) {
-                    Label("List", systemImage: "list.bullet").tag(false)
-                    Label("Board", systemImage: "rectangle.split.3x1").tag(true)
+                // одна кнопка панели: сегменты внутри стеклянной капсулы iOS 26 выглядят пилюлей в пилюле
+                Button { app.settings.versionBoard.toggle() } label: {
+                    app.settings.versionBoard
+                        ? Label("List", systemImage: "list.bullet")
+                        : Label("Board", systemImage: "rectangle.split.3x1")
                 }
-                .pickerStyle(.segmented)
             }
         }
         .task {
