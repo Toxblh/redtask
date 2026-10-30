@@ -2,11 +2,13 @@
 
 Канон: `redmine-expressive/spec/`. Копии в `redtask/spec/` и `redmine-adw/spec/` обновляет `tools/spec-sync.sh`; править только канон.
 
-| Клиент | Репозиторий | Платформа |
+Все три клиента называются **RedTask** (раньше Android — Redmine Expressive, GNOME — Redmine).
+
+| ID | Репозиторий | Платформа |
 |---|---|---|
-| Redmine Expressive | redmine-expressive | Android, Compose + Material 3 |
-| RedTask | redtask | iOS, SwiftUI |
-| Redmine (Adw) | redmine-adw | GNOME, GTK4 + libadwaita |
+| `ru.toxblh.redtask` | redmine-expressive | Android, Compose + Material 3 |
+| `ru.toxblh.RedTask` | redtask | iOS, SwiftUI |
+| `ru.toxblh.RedTask` | redmine-adw | GNOME, GTK4 + libadwaita |
 
 ## Принципы
 
@@ -211,7 +213,7 @@
 
 | Платформа | Каталог |
 |---|---|
-| GNOME | `~/.cache/redmine-adw/open/{id}/` (во flatpak — `~/.var/app/ru.toxblh.RedmineAdw/cache/…`) |
+| GNOME | `~/.cache/redtask/open/{id}/` (во flatpak — `~/.var/app/ru.toxblh.RedTask/cache/…`) |
 | Android | `cacheDir/attachments` |
 | iOS | кэш QuickLook-загрузок |
 
