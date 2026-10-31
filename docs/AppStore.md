@@ -39,7 +39,7 @@
    Отладочные аргументы — только в Debug-сборке; снимки с ними чистые (без отладочных плашек).
 8. **Описание, ключевые слова, URL поддержки, возрастной рейтинг** (4+, без пользовательского контента от
    приложения — контент приходит с сервера пользователя), категория Productivity.
-9. **Иконка**: заменить заготовку финальной (1024×1024, без альфы) — лучше через Icon Composer (`.icon`).
+9. **Иконка**: готова — стопка карточек задач с галочкой (светлая, тёмная, tinted), 1024×1024 RGB без альфы; исходник `tools/app-icon.py` (`python3 tools/app-icon.py <каталог>`).
 10. **Сборка и загрузка**: Product → Archive (схема RedTask, Any iOS Device) → Distribute App → App Store Connect,
     либо `xcodebuild archive` + `xcodebuild -exportArchive` с `method = app-store-connect`.
     Поднимать `CURRENT_PROJECT_VERSION` в `project.yml` на каждую загрузку.
