@@ -10,17 +10,29 @@ struct SearchView: View {
     @State private var total = 0
     @State private var loading = false
     @State private var error: String?
-    @AppStorage("recentSearches") private var recentRaw = ""
-
-    private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
+    private var recent: [RecentIssue] { app.settings.recentIssues }
 
     var body: some View {
         List(selection: $selection) {
             if query.isEmpty && !recent.isEmpty {
-                Section("Recent") {
-                    ForEach(recent, id: \.self) { r in
-                        Button { query = r } label: { Label(r, systemImage: "clock.arrow.circlepath") }
-                            .foregroundStyle(.primary)
+                Section {
+                    ForEach(recent) { r in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                StatusPill(status: r.status, compact: true)
+                                Text(verbatim: "#\(r.id)").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Text(r.subject).lineLimit(2)
+                                .strikethrough(r.status.isClosed, color: .secondary)
+                                .foregroundStyle(r.status.isClosed ? .secondary : .primary)
+                        }
+                        .tag(r.id)
+                    }
+                } header: {
+                    HStack {
+                        Text("Recent")
+                        Spacer()
+                        Button("Clear") { app.settings.recentIssues = [] }.font(.subheadline).textCase(nil)
                     }
                 }
             }
@@ -61,7 +73,7 @@ struct SearchView: View {
         .listStyle(.plain)
         .navigationTitle("Search")
         .searchable(text: $query, placement: .automatic, prompt: Text("Text or #number"))
-        .onSubmit(of: .search) { remember(query) }
+        .onChange(of: selection) { _, id in if let id { remember(id) } }
         .overlay {
             if !query.isEmpty && results.isEmpty && byId == nil {
                 if loading { ProgressView() }
@@ -81,10 +93,13 @@ struct SearchView: View {
         }
     }
 
-    private func remember(_ q: String) {
-        let s = q.trimmingCharacters(in: .whitespaces)
-        guard !s.isEmpty else { return }
-        recentRaw = ([s] + recent.filter { $0 != s }).prefix(8).joined(separator: "\n")
+    /// Открытая из поиска задача — в «Недавние» (spec 9, recent_opened).
+    private func remember(_ id: Int) {
+        let item = byId.flatMap { $0.id == id ? RecentIssue(id: id, subject: $0.subject, status: $0.status) : nil }
+            ?? results.first { $0.id == id }.flatMap { r in r.issueParts.map { RecentIssue(id: id, subject: $0.subject, status: $0.status) } }
+            ?? recent.first { $0.id == id }
+        guard let item else { return }
+        app.settings.recentIssues = recentOpened(recent.map(\.id), id).compactMap { i in i == id ? item : recent.first { $0.id == i } }
     }
 
     private func search() async {

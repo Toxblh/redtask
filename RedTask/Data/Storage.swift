@@ -46,6 +46,12 @@ enum NotifFlag: String, Codable, Sendable, CaseIterable {
     var defaultOn: Bool { [.scopeAssigned, .scopeAuthored, .scopeWatched].contains(self) }
 }
 
+struct RecentIssue: Codable, Sendable, Hashable, Identifiable {
+    var id: Int
+    var subject: String
+    var status: IssueStatus
+}
+
 struct AppSettings: Codable, Sendable, Equatable {
     var serverURL = ""
     var userId = 0
@@ -74,6 +80,8 @@ struct AppSettings: Codable, Sendable, Equatable {
     var projectPins: [String: [Int]] = [:]
     /// Экран вехи: доска вместо списка.
     var versionBoard = false
+    /// Недавние в поиске (spec 9): задачи, открытые из результатов, свежие первыми, не больше 10.
+    var recentIssues: [RecentIssue] = []
 
     var isLoggedIn: Bool { !serverURL.isEmpty && userId != 0 }
     var account: String { "\(serverURL)#\(userId)" }

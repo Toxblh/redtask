@@ -176,6 +176,7 @@ final class AppModel {
         s.userLogin = ""
         s.favorites = []
         s.favoritesPending = []
+        s.recentIssues = []
         s.lastCheck = nil
         settings = s
     }
