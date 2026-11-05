@@ -384,6 +384,12 @@ struct IssueDetailView: View {
                 if canAdd {
                     Button { newSubtask(issue) } label: { Label("Add subtask", systemImage: "plus") }
                 }
+                // spec 3.3: подзадачи экраном как у вехи — колонки статусов, аватары, поиск
+                if !issue.children.isEmpty {
+                    NavigationLink(value: SubtaskBoardLink(id: issue.id, subject: issue.subject)) {
+                        Label("As board", systemImage: "rectangle.split.3x1")
+                    }
+                }
             }
         }
     }

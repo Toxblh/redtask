@@ -176,6 +176,7 @@ struct RootView: View {
                     IssueDetailView(issueId: l.id, fragment: l.fragment, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
                 }
                 .navigationDestination(for: WikiRef.self) { WikiPageView(ref: $0) }
+                .navigationDestination(for: SubtaskBoardLink.self) { VersionView(parent: $0) }
                 .environment(\.navigate, NavigateAction { path.append($0) })
             }
         }

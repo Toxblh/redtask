@@ -144,7 +144,18 @@ private struct ProjectOverview: View {
 
 // MARK: - Вехи
 
-/// Задачи вех — один раз на веху: и для прогресса в списке, и для экрана вехи.
+/// Чьи задачи на доске: вехи (spec 3.2) или прямые подзадачи (spec 3.3).
+enum BoardScope: Hashable {
+    case version(Int), parent(Int)
+}
+
+/// Переход к подзадачам доской из задачи.
+struct SubtaskBoardLink: Hashable {
+    var id: Int
+    var subject: String
+}
+
+/// Задачи доски — один раз на веху или родителя: и для прогресса в списке вех, и для экрана.
 @MainActor @Observable
 final class VersionIssueStore {
     static let shared = VersionIssueStore()
@@ -152,17 +163,20 @@ final class VersionIssueStore {
     private var errors: [String: String] = [:]
     private var loading = Set<String>()
 
-    private func key(_ id: Int, _ app: AppModel) -> String { "\(app.account)-\(id)" }
-    func issues(_ id: Int, _ app: AppModel) -> [Issue]? { cache[key(id, app)] }
-    func error(_ id: Int, _ app: AppModel) -> String? { errors[key(id, app)] }
+    private func key(_ s: BoardScope, _ app: AppModel) -> String { "\(app.account)-\(s)" }
+    func issues(_ s: BoardScope, _ app: AppModel) -> [Issue]? { cache[key(s, app)] }
+    func error(_ s: BoardScope, _ app: AppModel) -> String? { errors[key(s, app)] }
 
-    func load(_ id: Int, _ app: AppModel, force: Bool = false) async {
-        let k = key(id, app)
+    func load(_ s: BoardScope, _ app: AppModel, force: Bool = false) async {
+        let k = key(s, app)
         guard force || cache[k] == nil, !loading.contains(k), let api = app.api else { return }
         loading.insert(k)
         defer { loading.remove(k) }
         do {
-            cache[k] = try await api.versionIssues(id)
+            switch s {
+            case .version(let id): cache[k] = try await api.boardIssues(version: id)
+            case .parent(let id): cache[k] = try await api.boardIssues(parent: id)
+            }
             errors[k] = nil
         } catch {
             errors[k] = error.localizedDescription
@@ -231,10 +245,10 @@ private struct VersionRow: View {
                 Label(Fmt.date(d), systemImage: "calendar").font(.subheadline)
                     .foregroundStyle(Fmt.isOverdue(d) && version.status != "closed" ? .red : .secondary)
             }
-            VersionProgressLine(issues: store.issues(version.id, app))
+            VersionProgressLine(issues: store.issues(.version(version.id), app))
         }
         .padding(.vertical, 2)
-        .task { await store.load(version.id, app) }
+        .task { await store.load(.version(version.id), app) }
     }
 }
 
@@ -261,42 +275,50 @@ private struct VersionProgressLine: View {
     }
 }
 
-/// Экран вехи: шапка, фильтры статуса и исполнителя (локально), список или доска.
+/// Экран вехи (spec 3.2) и подзадач доской (spec 3.3): шапка, фильтры статуса, исполнителей (аватары) и поиск
+/// по доске — локально; список или доска.
 struct VersionView: View {
     @Environment(AppModel.self) private var app
-    let version: Version
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    let scope: BoardScope
+    let title: String
+    var version: Version?
     @State private var filter: StatusFilter = .open
-    @State private var assignee = "all"
+    @State private var assignees = Set<String>()
+    @State private var query = ""
     @State private var statusOrder: [Int] = []
     private var store: VersionIssueStore { .shared }
 
+    init(version: Version) { scope = .version(version.id); title = version.name; self.version = version }
+    init(parent: SubtaskBoardLink) { scope = .parent(parent.id); title = "#\(parent.id) \(parent.subject)" }
+
     var body: some View {
         @Bindable var app = app
-        let all = store.issues(version.id, app)
+        let all = store.issues(scope, app)
         let byStatus = (all ?? []).filter { filter == .all || (filter == .closed) == $0.status.isClosed }
-        let options = assigneeOptions(byStatus, me: app.settings.userId)
-        let shown = filterByAssignee(byStatus, key: assignee, me: app.settings.userId)
+        let options = assigneeOptions(byStatus, me: app.settings.userId).filter { $0.key != "all" }
+        let shown = boardFilter(byStatus, me: app.settings.userId, assignees: assignees, query: query)
         VStack(spacing: 0) {
             header(all, options: options)
             if let all {
                 if all.isEmpty {
-                    ContentUnavailableView("No issues in this version", systemImage: "tray").frame(maxHeight: .infinity)
+                    ContentUnavailableView(version == nil ? "No subtasks" : "No issues in this version", systemImage: "tray").frame(maxHeight: .infinity)
                 } else if app.settings.versionBoard {
                     board(shown)
                 } else {
                     List(shown) { i in
-                        NavigationLink(value: IssueLink(id: i.id)) { IssueRow(issue: i, showProject: i.project.id != version.project?.id) }
+                        NavigationLink(value: IssueLink(id: i.id)) { IssueRow(issue: i, showProject: version.map { i.project.id != $0.project?.id } ?? false) }
                     }
                     .listStyle(.plain)
-                    .refreshable { await store.load(version.id, app, force: true) }
+                    .refreshable { await store.load(scope, app, force: true) }
                 }
-            } else if let e = store.error(version.id, app) {
-                LoadErrorView(message: e) { Task { await store.load(version.id, app, force: true) } }.frame(maxHeight: .infinity)
+            } else if let e = store.error(scope, app) {
+                LoadErrorView(message: e) { Task { await store.load(scope, app, force: true) } }.frame(maxHeight: .infinity)
             } else {
                 ProgressView().frame(maxHeight: .infinity)
             }
         }
-        .navigationTitle(version.name)
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -309,7 +331,7 @@ struct VersionView: View {
             }
         }
         .task {
-            await store.load(version.id, app)
+            await store.load(scope, app)
             statusOrder = (try? await app.refs?.statuses())?.map(\.id) ?? []
         }
     }
@@ -317,42 +339,38 @@ struct VersionView: View {
     @ViewBuilder
     private func header(_ all: [Issue]?, options: [AssigneeOption]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                if let d = version.dueDate { Label(Fmt.date(d), systemImage: "calendar") }
-                if let s = version.status { Text(versionStatusTitle(s)).foregroundStyle(.secondary) }
+            if let version {
+                HStack(spacing: 12) {
+                    if let d = version.dueDate { Label(Fmt.date(d), systemImage: "calendar") }
+                    if let s = version.status { Text(versionStatusTitle(s)).foregroundStyle(.secondary) }
+                }
+                .font(.subheadline)
+                if let d = version.description, !d.isEmpty { Text(d).font(.subheadline).foregroundStyle(.secondary).lineLimit(3) }
             }
-            .font(.subheadline)
-            if let d = version.description, !d.isEmpty { Text(d).font(.subheadline).foregroundStyle(.secondary).lineLimit(3) }
             VersionProgressLine(issues: all)
-            HStack {
-                Picker("Status", selection: $filter) {
-                    ForEach(StatusFilter.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                Menu {
-                    Picker("Assignee", selection: $assignee) {
-                        ForEach(options) { o in Text("\(assigneeTitle(o)) (\(o.count))").tag(o.key) }
+            Picker("Status", selection: $filter) {
+                ForEach(StatusFilter.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            HStack(spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search on board", text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    if !query.isEmpty {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
+                            .accessibilityLabel(Text("Clear"))
                     }
-                } label: {
-                    Label(assigneeTitle(options.first { $0.key == assignee } ?? AssigneeOption(key: "all", count: 0)),
-                          systemImage: assignee == "all" ? "person.2" : "person.fill")
-                        .lineLimit(1)
                 }
-                .accessibilityLabel(Text("Assignee"))
+                .padding(.horizontal, 8).padding(.vertical, 7)
+                .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
+                AssigneeAvatars(options: options, selected: $assignees, max: sizeClass == .regular ? 10 : 5)
             }
         }
         .padding(.horizontal)
         .padding(.bottom, 8)
-    }
-
-    private func assigneeTitle(_ o: AssigneeOption) -> String {
-        switch o.key {
-        case "all": String(localized: "Everyone")
-        case "me": String(localized: "Me")
-        case "none": String(localized: "Not assigned")
-        default: o.name ?? o.key
-        }
+        // выбранного исполнителя не осталось (сменили фильтр статуса) — не держим пустую доску
+        .onChange(of: options.map(\.key)) { _, keys in assignees.formIntersection(keys) }
     }
 
     /// Доска: колонки статусов вбок, внутри колонки — вертикальная прокрутка.
@@ -383,6 +401,74 @@ struct VersionView: View {
             .padding(.bottom, 8)
         }
     }
+}
+
+/// Фильтр исполнителей рядом аватаров, как в Jira: нажатие включает и выключает, можно несколько; ничего — все.
+/// «Без исполнителя» — серый кружок. Не поместилось — «+N» со списком с галочками.
+private struct AssigneeAvatars: View {
+    @Environment(AppModel.self) private var app
+    let options: [AssigneeOption]
+    @Binding var selected: Set<String>
+    let max: Int
+    private let size: CGFloat = 32
+
+    var body: some View {
+        let fits = options.count <= max
+        let visible = fits ? options : Array(options.prefix(max - 1))
+        HStack(spacing: -size * 0.3) {
+            ForEach(Array(visible.enumerated()), id: \.element.key) { n, o in
+                Button { toggle(o.key) } label: { avatar(o) }
+                    .buttonStyle(.plain)
+                    .zIndex(selected.contains(o.key) ? 100 : Double(visible.count - n))
+                    .help(hint(o))
+                    .accessibilityLabel(Text(hint(o)))
+                    .accessibilityAddTraits(selected.contains(o.key) ? .isSelected : [])
+            }
+            if !fits {
+                Menu {
+                    ForEach(options) { o in
+                        Toggle(hint(o), isOn: Binding(get: { selected.contains(o.key) }, set: { _ in toggle(o.key) }))
+                    }
+                } label: {
+                    let hidden = options.dropFirst(visible.count).filter { selected.contains($0.key) }.count
+                    Text(verbatim: "+\(options.count - visible.count)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(hidden > 0 ? Color.white : Color.primary)
+                        .frame(width: size, height: size)
+                        .background(hidden > 0 ? Color.accentColor : Color(.systemGray5), in: Circle())
+                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                }
+                .accessibilityLabel(Text("More assignees"))
+            }
+        }
+        .fixedSize()
+    }
+
+    private func avatar(_ o: AssigneeOption) -> some View {
+        let on = selected.contains(o.key)
+        return Group {
+            if o.key == "none" {
+                Image(systemName: "person.fill.questionmark").font(.system(size: size * 0.4)).foregroundStyle(.white)
+                    .frame(width: size, height: size).background(Color(.systemGray3), in: Circle())
+            } else {
+                Avatar(name: name(o), userId: o.key == "me" ? app.settings.userId : Int(o.key.dropFirst(5)), size: size)
+            }
+        }
+        .overlay(Circle().stroke(on ? Color.accentColor : Color(.systemBackground), lineWidth: on ? 3 : 2))
+        .opacity(selected.isEmpty || on ? 1 : 0.45)
+    }
+
+    private func name(_ o: AssigneeOption) -> String {
+        switch o.key {
+        case "me": app.settings.userName.isEmpty ? String(localized: "Me") : app.settings.userName
+        case "none": String(localized: "Not assigned")
+        default: o.name ?? o.key
+        }
+    }
+
+    private func hint(_ o: AssigneeOption) -> String { "\(name(o)) — \(o.count)" }
+
+    private func toggle(_ k: String) { if selected.remove(k) == nil { selected.insert(k) } }
 }
 
 /// Карточка на доске — компактная: номер и трекер, тема, приоритет, исполнитель.

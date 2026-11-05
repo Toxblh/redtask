@@ -313,10 +313,11 @@ final class RedmineAPI: Sendable {
     }
     func projectFiles(_ projectId: Int) async throws -> [Attachment] { try await (get("projects/\(projectId)/files.json") as FilesResponse).files }
 
-    /// Все задачи вехи, страницами, не больше 500 (spec 3.2).
-    func versionIssues(_ versionId: Int) async throws -> [Issue] {
+    /// Все задачи вехи (spec 3.2) или прямые подзадачи (spec 3.3), страницами, не больше 500.
+    func boardIssues(version: Int? = nil, parent: Int? = nil) async throws -> [Issue] {
         var q = IssueQuery(statusFilter: "*", limit: 100)
-        q.fixedVersionId = versionId
+        q.fixedVersionId = version
+        q.parentId = parent
         var out: [Issue] = []
         while out.count < 500 {
             let page = try await issues(q)
