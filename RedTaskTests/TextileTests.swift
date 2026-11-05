@@ -22,6 +22,27 @@ struct TextileBlockTests {
         ])
     }
 
+    /// Таблица как в настоящих вики-регламентах (spec 7): строки на несколько строк, списки в ячейках, [[a|b]], пустые ячейки.
+    @Test func multilineWikiTable() throws {
+        final class Token {}
+        #if SWIFT_PACKAGE
+        let bundle = Bundle.module
+        #else
+        let bundle = Bundle(for: Token.self)
+        #endif
+        let src = try String(contentsOf: bundle.url(forResource: "wiki-table", withExtension: "txt")!, encoding: .utf8)
+        let rows = textileTableRows(src)
+        #expect(rows.count == 17 && rows.allSatisfy { $0.count == 6 }, "\(rows.map(\.count))")
+        #expect(rows.map { $0[0].text }.dropFirst().joined(separator: " ") == "1 2 3 4.1 4.2 5 6 7 8 8.1 9 10 11 12 13 14")
+        #expect(rows[0][0] == TCell(text: "Шаг \nномер", header: true))
+        #expect(rows[1][2].text.hasPrefix("* Карточка создана\n* Поля заполнены\n"))
+        #expect(rows[1][5].text == "* Пример заметки\n- вариант без маркера списка;\n* Смотрите [[Вики:Справка|справку]]")
+        #expect(rows[2][5].text.isEmpty)
+        // весь текст — одна таблица, и разбор блоков даёт те же строки
+        let blocks = groupBlocks(parseTextile(src))
+        #expect(blocks.count == 1 && blocks[0].kind == .table && blocks[0].lines.count == 17)
+    }
+
     @Test func dashAndOneDotAreNotLists() {
         #expect(parseTextile("- пункт") == [.plain("- пункт")])
         #expect(parseTextile("1. пункт") == [.plain("1. пункт")])

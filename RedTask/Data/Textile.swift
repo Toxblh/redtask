@@ -184,19 +184,51 @@ struct TBlock: Equatable, Sendable {
     var gap = false
 }
 
-/// ponytail: режем по «|» в лоб — «|» внутри @кода@ разобьёт ячейку.
+/// Ячейки строки таблицы: «|» внутри [[…|…]] ячейку не делит; переносы строк внутри ячейки сохраняются.
+/// ponytail: «|» внутри @кода@ всё ещё делит ячейку.
 func parseCells(_ line: String) -> [TCell] {
-    var t = line.trimmingCharacters(in: .whitespaces)
+    var t = Substring(line.trimmingCharacters(in: .whitespacesAndNewlines))
     if t.hasPrefix("|") { t.removeFirst() }
     if t.hasSuffix("|") { t.removeLast() }
-    let parts = t.split(separator: "|", maxSplits: Textile.maxCells - 1, omittingEmptySubsequences: false)
+    var parts: [String] = [], cur = "", wiki = 0, prev: Character = " "
+    for ch in t {
+        if ch == "|" && wiki == 0 && parts.count < Textile.maxCells - 1 { parts.append(cur); cur = ""; prev = ch; continue }
+        if ch == "[" && prev == "[" { wiki += 1; prev = " " } else if ch == "]" && prev == "]" && wiki > 0 { wiki -= 1; prev = " " } else { prev = ch }
+        cur.append(ch)
+    }
+    parts.append(cur)
     return parts.map { raw in
-        let r = raw.trimmingCharacters(in: .whitespaces)
+        let r = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let m = Textile.cellModRe.first(r) else { return TCell(text: r) }
         let mods = m.g(1)
         let span = Textile.cellSpanRe.first(mods).flatMap { Int($0.g(1)) }.map { min(max($0, 1), 20) } ?? 1
-        return TCell(text: m.g(2).trimmingCharacters(in: .whitespaces), header: mods.hasPrefix("_") || mods.hasSuffix("_"), span: span)
+        // «.» в регулярке не берёт перевод строки — остаток ячейки берём целиком
+        let rest = (r as NSString).substring(from: m.r.range(at: 2).location)
+        return TCell(text: rest.trimmingCharacters(in: .whitespacesAndNewlines), header: mods.hasPrefix("_") || mods.hasSuffix("_"), span: span)
     }
+}
+
+/// Строка таблицы продолжается следующими строками, пока очередная не кончится «|» (spec 7).
+/// Пустая строка рвёт и незакрытую строку таблицы: у Redmine блоки делятся пустыми строками.
+/// Возвращает строку целиком (через \n) и индекс следующей строки.
+func tableRow(_ src: [String], _ start: Int) -> (String, Int) {
+    var row = src[start], i = start + 1
+    while !row.trimmingCharacters(in: .whitespaces).hasSuffix("|") && i < src.count
+            && !src[i].trimmingCharacters(in: .whitespaces).isEmpty { row += "\n" + src[i]; i += 1 }
+    return (row, i)
+}
+
+/// Строки таблицы Textile ячейками (набор textile_table).
+func textileTableRows(_ src: String) -> [[TCell]] {
+    let lines = src.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+    var out: [[TCell]] = [], i = 0
+    while i < lines.count {
+        guard lines[i].drop(while: { $0 == " " || $0 == "\t" }).hasPrefix("|") else { i += 1; continue }
+        let (row, next) = tableRow(lines, i)
+        out.append(parseCells(row))
+        i = next
+    }
+    return out
 }
 
 func parseTextile(_ src: String) -> [TLine] {
@@ -341,6 +373,10 @@ private func parseBlock(_ src: [String], depth: Int) -> [TLine] {
                 pre = true
                 let after = ns.substring(from: open.range.location + open.range.length)
                 if !after.isEmpty { preLine(after) }
+            } else if t.hasPrefix("|") {
+                let (row, next) = tableRow(src, i - 1)
+                i = next
+                text(row)
             } else {
                 text(line)
             }

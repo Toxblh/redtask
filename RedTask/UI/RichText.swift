@@ -212,8 +212,18 @@ private struct TableBlock: View {
         func col(_ f: (TCell) -> CGFloat) -> [CGFloat] {
             (0..<cols).map { j in (rows.compactMap { $0.indices.contains(j) ? f($0[j]) : nil }.max() ?? 0) + Self.pad + 1 }
         }
-        return tableColumns(min: col { c in c.text.split(separator: " ").map { w($0, c.header) }.max() ?? 0 },
-                            max: col { w($0.text, $0.header) }, avail: avail)
+        // ячейка в несколько строк (spec 7): max — самая длинная строка
+        return tableColumns(min: col { c in c.text.split(whereSeparator: \.isWhitespace).map { w($0, c.header) }.max() ?? 0 },
+                            max: col { c in c.text.split(separator: "\n").map { w($0, c.header) }.max() ?? 0 }, avail: avail)
+    }
+
+    /// Ячейка — обычный блок текста: списки, ссылки, переносы строк (spec 7); заголовок — жирным.
+    @ViewBuilder private func cellView(_ cell: TCell) -> some View {
+        if cell.header {
+            InlineText(lines: cell.text.components(separatedBy: "\n").map { .plain($0) }, ctx: ctx, muted: false, bold: cell.header)
+        } else {
+            BlocksView(blocks: groupBlocks(parseTextile(cell.text)), ctx: ctx)
+        }
     }
 
     var body: some View {
@@ -226,7 +236,7 @@ private struct TableBlock: View {
                 GridRow {
                     ForEach(Array(row.enumerated()), id: \.offset) { j, cell in
                         let width: CGFloat? = layout.map { $0.widths[j] - Self.pad } ?? (wide ? 160 * CGFloat(cell.span) : nil)
-                        InlineText(lines: [.plain(cell.text)], ctx: ctx, muted: false, bold: cell.header)
+                        cellView(cell)
                             .frame(width: width, alignment: .leading)
                             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
                             .padding(.horizontal, 8).padding(.vertical, 6)
