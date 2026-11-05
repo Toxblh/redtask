@@ -129,4 +129,61 @@ struct SpecVectorsTests {
             #expect(zip(out.widths, want).allSatisfy { abs($0 - $1) < 0.01 }, "\(out.widths) != \(want)")
         }
     }
+
+    @Test func textileTableCases() {
+        for c in cases("textile_table") {
+            let rows = textileTableRows(c["src"] as! String).map { $0.map { ["h": $0.header, "text": $0.text] as [String: AnyHashable] } }
+            let want = (c["rows"] as! [[[String: Any]]]).map { $0.map { ["h": $0["h"] as! Bool, "text": $0["text"] as! String] as [String: AnyHashable] } }
+            #expect(rows == want, "\(c["name"]!)")
+        }
+    }
+
+    @Test func mentionQueryCases() {
+        for c in cases("mention_query") {
+            #expect(mentionQuery(c["text"] as! String, cursor: c["cursor"] as! Int) == c["query"] as? String, "\(c["text"]!)")
+        }
+    }
+
+    @Test func mentionCandidatesCases() {
+        let s = section("mention_candidates")
+        func people(_ k: String) -> [MentionPerson] {
+            (s[k] as! [[String: Any]]).map { MentionPerson(id: $0["id"] as! Int, name: $0["name"] as! String, login: $0["login"] as! String) }
+        }
+        for c in s["cases"] as! [[String: Any]] {
+            let out = mentionCandidates(participants: people("participants"), people: people("people"), query: c["query"] as! String, limit: c["limit"] as! Int)
+            #expect(out.map(\.id) == c["ids"] as! [Int], "\(c["query"]!)")
+        }
+    }
+
+    @Test func recentOpenedCases() {
+        for c in cases("recent_opened") {
+            #expect(recentOpened(c["list"] as! [Int], c["open"] as! Int) == c["out"] as! [Int])
+        }
+    }
+
+    @Test func boardFilterCases() {
+        let s = section("board_filter")
+        let me = s["me"] as! Int
+        let issues: [RMIssue] = (s["issues"] as! [[String: Any]]).map {
+            var i = issue($0["id"] as! Int, assignee: $0["assignee"])
+            i.subject = $0["subject"] as! String
+            return i
+        }
+        for c in s["cases"] as! [[String: Any]] {
+            let out = boardFilter(issues, me: me, assignees: Set(c["assignees"] as! [String]), query: c["query"] as! String)
+            #expect(out.map(\.id) == c["ids"] as! [Int], "\(c["assignees"]!) \(c["query"]!)")
+        }
+    }
+
+    @Test func zipTailCases() {
+        for c in cases("zip_tail") {
+            let e = zipTailEntry(size: c["size"] as! Int, tail: Data(base64Encoded: c["tail"] as! String)!)
+            let want = (c["entry"] as? [String: Any]).map {
+                ZipEntry(name: $0["name"] as! String, localOffset: $0["local_offset"] as! Int,
+                         compressedSize: $0["compressed_size"] as! Int, method: $0["method"] as! Int)
+            }
+            let got = e.map { ZipEntry(name: $0.name, localOffset: $0.localOffset, compressedSize: $0.compressedSize, method: $0.method) }
+            #expect(got == want, "\(c["name"]!)")
+        }
+    }
 }

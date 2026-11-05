@@ -530,3 +530,75 @@ func boardColumns(_ issues: [Issue], statusOrder: [Int]) -> [BoardColumn] {
     func rank(_ c: BoardColumn) -> Int { statusOrder.firstIndex(of: c.status.id) ?? Int.max }
     return cols.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
 }
+
+/// Поиск без регистра и с ё = е — для доски и упоминаний.
+func searchFold(_ s: String) -> String { s.lowercased().replacingOccurrences(of: "ё", with: "е") }
+
+/// Фильтр доски и списка вехи/подзадач (набор board_filter): выбранные аватары (me, none, user:N; пусто — все)
+/// и поиск — номер с начала (можно с «#») или начало слова темы. Описание набора говорит «подстрока», но случай «ел»
+/// (не находит «Релиз») требует начала слова — прав набор.
+func boardFilter(_ issues: [Issue], me: Int, assignees: Set<String>, query: String) -> [Issue] {
+    let q = searchFold(query.trimmingCharacters(in: .whitespaces))
+    let digits = q.hasPrefix("#") ? String(q.dropFirst()) : q
+    let byNumber = !digits.isEmpty && digits.allSatisfy(\.isASCII) && digits.allSatisfy(\.isNumber)
+    return issues.filter { i in
+        let key = i.assignedTo.map { $0.id == me ? "me" : "user:\($0.id)" } ?? "none"
+        guard assignees.isEmpty || assignees.contains(key) else { return false }
+        if q.isEmpty { return true }
+        return (byNumber && String(i.id).hasPrefix(digits)) || fromWordStarts(i.subject).contains { $0.hasPrefix(byNumber ? digits : q) }
+    }
+}
+
+/// Хвосты темы с начала каждого слова («Релиз 11.1» → «релиз 11.1», «11.1», «1»): запрос может быть из нескольких слов.
+private func fromWordStarts(_ s: String) -> [Substring] {
+    let f = Substring(searchFold(s))
+    var prev: Character = " "
+    return f.indices.compactMap { i in
+        defer { prev = f[i] }
+        let w = { (c: Character) in c.isLetter || c.isNumber }
+        return w(f[i]) && !w(prev) ? f[i...] : nil
+    }
+}
+
+/// Недавние в поиске (набор recent_opened): открытая задача — первой, без повторов, не больше 10.
+func recentOpened(_ list: [Int], _ id: Int) -> [Int] { Array(([id] + list.filter { $0 != id }).prefix(10)) }
+
+/// Кандидат упоминания.
+struct MentionPerson: Codable, Sendable, Hashable, Identifiable {
+    var id: Int
+    var name: String
+    var login: String
+}
+
+/// Запрос упоминания по тексту до курсора (набор mention_query); cursor — в UTF-16.
+/// «@» не после буквы, цифры, «_» или «@»; дальше [буквы цифры _ . -]*.
+func mentionQuery(_ text: String, cursor: Int) -> String? {
+    let u = Array(text.utf16.prefix(cursor))
+    func word(_ c: UInt16) -> Bool {
+        guard let s = Unicode.Scalar(c) else { return true } // половинка суррогатной пары — буква не-BMP
+        return CharacterSet.letters.contains(s) || CharacterSet.decimalDigits.contains(s) || c == 0x5F
+    }
+    var i = u.count
+    while i > 0, word(u[i - 1]) || u[i - 1] == 0x2E || u[i - 1] == 0x2D { i -= 1 }
+    guard i > 0, u[i - 1] == 0x40 else { return nil }
+    if i > 1, word(u[i - 2]) || u[i - 2] == 0x40 { return nil }
+    return String(utf16CodeUnits: Array(u[i...]), count: u.count - i)
+}
+
+/// Кандидаты упоминания (набор mention_candidates): люди задачи, потом остальные известные; в каждой группе
+/// сначала совпадение по началу логина или слова имени, потом по подстроке. Пустой запрос — только люди задачи.
+func mentionCandidates(participants: [MentionPerson], people: [MentionPerson], query: String, limit: Int) -> [MentionPerson] {
+    let q = searchFold(query.trimmingCharacters(in: .whitespaces))
+    var groups: [[MentionPerson]]
+    if q.isEmpty { groups = [participants] } else {
+        func prefix(_ p: MentionPerson) -> Bool {
+            searchFold(p.login).hasPrefix(q) || searchFold(p.name).split(whereSeparator: \.isWhitespace).contains { $0.hasPrefix(q) }
+        }
+        func sub(_ p: MentionPerson) -> Bool { searchFold(p.name).contains(q) || searchFold(p.login).contains(q) }
+        groups = [participants.filter(prefix), participants.filter { !prefix($0) && sub($0) },
+                  people.filter(prefix), people.filter { !prefix($0) && sub($0) }]
+    }
+    var seen = Set<Int>(), out: [MentionPerson] = []
+    for p in groups.joined() where out.count < limit && seen.insert(p.id).inserted { out.append(p) }
+    return out
+}
