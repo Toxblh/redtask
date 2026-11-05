@@ -812,5 +812,511 @@
         "scroll": false
       }
     ]
+  },
+  "mention_query": {
+    "_": "Запрос @упоминания по тексту до курсора: «@» не после буквы, цифры, «_» или «@» (любой алфавит — e-mail и почта@кириллица не упоминания), дальше [буквы цифры _ . -]* до курсора. Нет — null. cursor — позиция в символах (UTF-16 = кодпоинты для этих строк).",
+    "cases": [
+      {
+        "text": "привет @ив",
+        "cursor": 10,
+        "query": "ив"
+      },
+      {
+        "text": "@",
+        "cursor": 1,
+        "query": ""
+      },
+      {
+        "text": "mail a@b",
+        "cursor": 8,
+        "query": null
+      },
+      {
+        "text": "почта@ив",
+        "cursor": 8,
+        "query": null
+      },
+      {
+        "text": "@@x",
+        "cursor": 3,
+        "query": null
+      },
+      {
+        "text": "@ivanov ",
+        "cursor": 8,
+        "query": null
+      },
+      {
+        "text": "см. @ivan.petrov",
+        "cursor": 16,
+        "query": "ivan.petrov"
+      },
+      {
+        "text": "hi @iv rest",
+        "cursor": 6,
+        "query": "iv"
+      },
+      {
+        "text": "(@semenov",
+        "cursor": 9,
+        "query": "semenov"
+      }
+    ]
+  },
+  "mention_candidates": {
+    "_": "Кандидаты @упоминания и пикера людей. participants — люди задачи в порядке: исполнитель, автор, авторы комментариев от свежих к старым, наблюдатели (без повторов). people — все остальные известные: кэш сотрудников + ответ people.json?search= в порядке сервера. Сравнение без регистра, ё = е. Пустой запрос — только participants. Иначе совпадение по началу логина или любого слова имени (prefix) либо по подстроке имени или логина (substring). Порядок: participants-prefix, participants-substring, people-prefix, people-substring; внутри — исходный порядок; повтор id — по первому; не больше limit.",
+    "participants": [
+      {
+        "id": 1,
+        "name": "Иванов Пётр",
+        "login": "ivanovp"
+      },
+      {
+        "id": 2,
+        "name": "Семёнов Андрей",
+        "login": "semenov"
+      },
+      {
+        "id": 3,
+        "name": "Петров Иван",
+        "login": "petrovi"
+      }
+    ],
+    "people": [
+      {
+        "id": 4,
+        "name": "Иванова Анна",
+        "login": "ivanovaa"
+      },
+      {
+        "id": 1,
+        "name": "Иванов Пётр",
+        "login": "ivanovp"
+      },
+      {
+        "id": 5,
+        "name": "Сидоров Пётр",
+        "login": "sidorov"
+      }
+    ],
+    "cases": [
+      {
+        "query": "",
+        "limit": 8,
+        "ids": [
+          1,
+          2,
+          3
+        ]
+      },
+      {
+        "query": "иван",
+        "limit": 8,
+        "ids": [
+          1,
+          3,
+          4
+        ]
+      },
+      {
+        "query": "петр",
+        "limit": 8,
+        "ids": [
+          1,
+          3,
+          5
+        ]
+      },
+      {
+        "query": "Пётр",
+        "limit": 8,
+        "ids": [
+          1,
+          3,
+          5
+        ]
+      },
+      {
+        "query": "емен",
+        "limit": 8,
+        "ids": [
+          2
+        ]
+      },
+      {
+        "query": "ov",
+        "limit": 8,
+        "ids": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ]
+      },
+      {
+        "query": "ov",
+        "limit": 2,
+        "ids": [
+          1,
+          2
+        ]
+      },
+      {
+        "query": "sid",
+        "limit": 8,
+        "ids": [
+          5
+        ]
+      },
+      {
+        "query": "zzz",
+        "limit": 8,
+        "ids": []
+      }
+    ]
+  },
+  "recent_opened": {
+    "_": "Недавние в поиске: id задач, открытых из результатов поиска (или по #номеру). Открытие ставит id первым, повтор убирается, не больше 10.",
+    "cases": [
+      {
+        "list": [],
+        "open": 5,
+        "out": [
+          5
+        ]
+      },
+      {
+        "list": [
+          1,
+          2,
+          3
+        ],
+        "open": 2,
+        "out": [
+          2,
+          1,
+          3
+        ]
+      },
+      {
+        "list": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "open": 11,
+        "out": [
+          11,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ]
+      },
+      {
+        "list": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "open": 10,
+        "out": [
+          10,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ]
+      }
+    ]
+  },
+  "board_filter": {
+    "_": "Фильтр доски/списка вехи и подзадач: assignees — выбранные аватары (ключи как в assignee_filter: me, none, user:N), пусто = все; несколько — объединение. query — поиск по доске: обрезается; только цифры (можно с «#») — начало номера ИЛИ подстрока темы; иначе подстрока темы без регистра, ё = е. Оба условия вместе. Порядок задач сохраняется.",
+    "me": 7,
+    "issues": [
+      {
+        "id": 1201,
+        "subject": "Ёлка на сайте",
+        "assignee": {
+          "id": 7,
+          "name": "Я Сам"
+        }
+      },
+      {
+        "id": 1202,
+        "subject": "Релиз 11.1",
+        "assignee": {
+          "id": 9,
+          "name": "Борис"
+        }
+      },
+      {
+        "id": 1340,
+        "subject": "Еловая ветка",
+        "assignee": null
+      },
+      {
+        "id": 2120,
+        "subject": "Документация к релизу",
+        "assignee": {
+          "id": 8,
+          "name": "Алла"
+        }
+      }
+    ],
+    "cases": [
+      {
+        "assignees": [],
+        "query": "",
+        "ids": [
+          1201,
+          1202,
+          1340,
+          2120
+        ]
+      },
+      {
+        "assignees": [
+          "me",
+          "user:8"
+        ],
+        "query": "",
+        "ids": [
+          1201,
+          2120
+        ]
+      },
+      {
+        "assignees": [
+          "none"
+        ],
+        "query": "",
+        "ids": [
+          1340
+        ]
+      },
+      {
+        "assignees": [],
+        "query": "елк",
+        "ids": [
+          1201
+        ]
+      },
+      {
+        "assignees": [],
+        "query": "ел",
+        "ids": [
+          1201,
+          1340
+        ]
+      },
+      {
+        "assignees": [],
+        "query": "#12",
+        "ids": [
+          1201,
+          1202
+        ]
+      },
+      {
+        "assignees": [],
+        "query": "11",
+        "ids": [
+          1202
+        ]
+      },
+      {
+        "assignees": [],
+        "query": "релиз",
+        "ids": [
+          1202,
+          2120
+        ]
+      },
+      {
+        "assignees": [
+          "user:9"
+        ],
+        "query": "релиз",
+        "ids": [
+          1202
+        ]
+      }
+    ]
+  },
+  "zip_tail": {
+    "_": "Миниатюра документа по хвосту файла (Range: bytes=-N): найти EOCD, центральный каталог (должен целиком лежать в хвосте, иначе null), запись миниатюры по тем же правилам, что embedded_thumbnail. Выход: имя, смещение локального заголовка, сжатый размер, метод — или null. Потом Range на local_offset … local_offset+30+len(имя)+extra+compressed_size (extra — из локального заголовка). tail — base64.",
+    "cases": [
+      {
+        "name": "odt, весь центральный каталог в хвосте",
+        "size": 582,
+        "tail": "UEsDBBQAAAAAAAAAIVxexjIMJwAAACcAAAAIAAAAbWltZXR5cGVhcHBsaWNhdGlvbi92bmQub2FzaXMub3BlbmRvY3VtZW50LnRleHRQSwMEFAAAAAgAAAAhXHtPwTINAAAAIAMAAAsAAABjb250ZW50LnhtbLOp0LezGcWjeBRjxQBQSwMEFAAAAAAAAAAhXGZDFMdGAAAARgAAABgAAABUaHVtYm5haWxzL3RodW1ibmFpbC5wbmeJUE5HDQoaCgAAAA1JSERSAAAAAQAAAAEIBgAAAB8VxIkAAAANSURBVHjaY/zPwPAfAAUFAgBfyPHSAAAAAElFTkSuQmCCUEsDBBQAAAAIAAAAIVyw5csIBgAAAAQAAAAVAAAATUVUQS1JTkYvbWFuaWZlc3QueG1ss8nVtwMAUEsBAhQDFAAAAAAAAAAhXF7GMgwnAAAAJwAAAAgAAAAAAAAAAAAAAIABAAAAAG1pbWV0eXBlUEsBAhQDFAAAAAgAAAAhXHtPwTINAAAAIAMAAAsAAAAAAAAAAAAAAIABTQAAAGNvbnRlbnQueG1sUEsBAhQDFAAAAAAAAAAhXGZDFMdGAAAARgAAABgAAAAAAAAAAAAAAIABgwAAAFRodW1ibmFpbHMvdGh1bWJuYWlsLnBuZ1BLAQIUAxQAAAAIAAAAIVyw5csIBgAAAAQAAAAVAAAAAAAAAAAAAACAAf8AAABNRVRBLUlORi9tYW5pZmVzdC54bWxQSwUGAAAAAAQABAD4AAAAOAEAAAAA",
+        "entry": {
+          "name": "Thumbnails/thumbnail.png",
+          "local_offset": 131,
+          "compressed_size": 70,
+          "method": 0
+        }
+      },
+      {
+        "name": "odt, хвост короче центрального каталога",
+        "size": 582,
+        "tail": "QS1JTkYvbWFuaWZlc3QueG1sUEsFBgAAAAAEAAQA+AAAADgBAAAAAA==",
+        "entry": null
+      },
+      {
+        "name": "docx, миниатюра deflate",
+        "size": 393,
+        "tail": "UEsDBBQAAAAIAAAAIVxPfTwbBgAAAAQAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMp0bcDAFBLAwQUAAAACAAAACFcP3FyfQgAAAA1AAAAFwAAAGRvY1Byb3BzL3RodW1ibmFpbC5qcGVn+3/jfxbJAABQSwMEFAAAAAgAAAAhXEdQyt8LAAAAkAEAABEAAAB3b3JkL2RvY3VtZW50LnhtbLMp17ezGcWDBgMAUEsBAhQDFAAAAAgAAAAhXE99PBsGAAAABAAAABMAAAAAAAAAAAAAAIABAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAMUAAAACAAAACFcP3FyfQgAAAA1AAAAFwAAAAAAAAAAAAAAgAE3AAAAZG9jUHJvcHMvdGh1bWJuYWlsLmpwZWdQSwECFAMUAAAACAAAACFcR1DK3wsAAACQAQAAEQAAAAAAAAAAAAAAgAF0AAAAd29yZC9kb2N1bWVudC54bWxQSwUGAAAAAAMAAwDFAAAArgAAAAAA",
+        "entry": {
+          "name": "docProps/thumbnail.jpeg",
+          "local_offset": 55,
+          "compressed_size": 8,
+          "method": 8
+        }
+      },
+      {
+        "name": "docx с wmf — не показываем",
+        "size": 265,
+        "tail": "UEsDBBQAAAAIAAAAIVxPfTwbBgAAAAQAAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbLMp0bcDAFBLAwQUAAAAAAAAACFcQHZ92gMAAAADAAAAFgAAAGRvY1Byb3BzL3RodW1ibmFpbC53bWZ3bWZQSwECFAMUAAAACAAAACFcT308GwYAAAAEAAAAEwAAAAAAAAAAAAAAgAEAAAAAW0NvbnRlbnRfVHlwZXNdLnhtbFBLAQIUAxQAAAAAAAAAIVxAdn3aAwAAAAMAAAAWAAAAAAAAAAAAAACAATcAAABkb2NQcm9wcy90aHVtYm5haWwud21mUEsFBgAAAAACAAIAhQAAAG4AAAAAAA==",
+        "entry": null
+      }
+    ]
+  },
+  "textile_table": {
+    "_": "Разбор строк таблицы Textile. Строка таблицы начинается с «|» и продолжается следующими строками, пока очередная строка (без пробелов в конце) не закончится «|». Ячейки — по «|» вне [[…]]; «_.» в начале ячейки — заголовок; текст ячейки обрезан по краям, переносы строк внутри сохраняются (в ячейке может быть список «* …»). Выход — строки из ячеек {h, text}.",
+    "cases": [
+      {
+        "name": "простая",
+        "src": "|_.A|_.B|\n|1|2|",
+        "rows": [
+          [
+            {
+              "h": true,
+              "text": "A"
+            },
+            {
+              "h": true,
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "h": false,
+              "text": "1"
+            },
+            {
+              "h": false,
+              "text": "2"
+            }
+          ]
+        ]
+      },
+      {
+        "name": "заголовок с переносом",
+        "src": "|_.Номер \nшага |_.Название шага |",
+        "rows": [
+          [
+            {
+              "h": true,
+              "text": "Номер \nшага"
+            },
+            {
+              "h": true,
+              "text": "Название шага"
+            }
+          ]
+        ]
+      },
+      {
+        "name": "ячейка со списком на несколько строк",
+        "src": "| 2 | Проверка заявки|* Отклонить или...\n* Переход к шагу 3\n| Руководитель | * Пишет причину|",
+        "rows": [
+          [
+            {
+              "h": false,
+              "text": "2"
+            },
+            {
+              "h": false,
+              "text": "Проверка заявки"
+            },
+            {
+              "h": false,
+              "text": "* Отклонить или...\n* Переход к шагу 3"
+            },
+            {
+              "h": false,
+              "text": "Руководитель"
+            },
+            {
+              "h": false,
+              "text": "* Пишет причину"
+            }
+          ]
+        ]
+      },
+      {
+        "name": "вики-ссылка с | внутри ячейки",
+        "src": "| 5 | * Авторы соблюдают [[wiki:Правила|правила]] |",
+        "rows": [
+          [
+            {
+              "h": false,
+              "text": "5"
+            },
+            {
+              "h": false,
+              "text": "* Авторы соблюдают [[wiki:Правила|правила]]"
+            }
+          ]
+        ]
+      },
+      {
+        "name": "пустые ячейки",
+        "src": "| 9 | Пост |  |",
+        "rows": [
+          [
+            {
+              "h": false,
+              "text": "9"
+            },
+            {
+              "h": false,
+              "text": "Пост"
+            },
+            {
+              "h": false,
+              "text": ""
+            }
+          ]
+        ]
+      }
+    ]
   }
 }
