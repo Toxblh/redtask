@@ -133,7 +133,7 @@ struct EditIssueView: View {
                     TextField("Subject", text: $subject, axis: .vertical)
                 }
                 Section("Description") {
-                    TextileEditor(text: $description, attachments: issue.attachments, placeholder: "Description")
+                    TextileEditor(text: $description, attachments: issue.attachments, placeholder: "Description", participants: issueParticipants(issue))
                 }
                 Section {
                     if !trackers.isEmpty {

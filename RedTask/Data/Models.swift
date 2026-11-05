@@ -602,3 +602,10 @@ func mentionCandidates(participants: [MentionPerson], people: [MentionPerson], q
     for p in groups.joined() where out.count < limit && seen.insert(p.id).inserted { out.append(p) }
     return out
 }
+
+/// Люди задачи для упоминаний (spec 8.1): исполнитель, автор, авторы комментариев от свежих к старым, наблюдатели.
+func issueParticipants(_ issue: Issue) -> [Named] {
+    var seen = Set<Int>()
+    return ([issue.assignedTo, issue.author] + issue.journals.reversed().map(\.user) + issue.watchers.map { Optional($0) })
+        .compactMap { $0 }.filter { seen.insert($0.id).inserted }
+}

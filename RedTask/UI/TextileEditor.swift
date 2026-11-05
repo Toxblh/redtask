@@ -8,6 +8,8 @@ struct TextileEditor: View {
     /// Файлы черновика — их тоже можно вставить картинкой по имени.
     var pendingNames: [String] = []
     var placeholder: LocalizedStringKey = "Comment"
+    /// Люди задачи — первыми в подсказке «@» (spec 8.1).
+    var participants: [Named] = []
     /// Режим предпросмотра снаружи (лист комментария держит переключатель у себя); nil — свой сегмент сверху.
     var previewMode: Binding<Bool>? = nil
     /// Во весь лист (комментарий) — без минимальной высоты строки формы, фокус сразу.
@@ -20,6 +22,7 @@ struct TextileEditor: View {
     @State private var linkText = ""
     @State private var picker: Lookup?
     @FocusState private var focused: Bool
+    @State private var mentions = MentionSearch()
 
     enum Lookup: String, Identifiable { case mention, issue; var id: String { rawValue } }
 
@@ -63,10 +66,17 @@ struct TextileEditor: View {
                     // панель разметки — полосой над клавиатурой, пока поле в фокусе. Не .toolbar(.keyboard):
                     // прокручиваемый ряд там сжимается до пары кнопок или не показывается вовсе
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        if focused { formatBar }
+                        if focused {
+                            VStack(spacing: 0) {
+                                if let q = mentionQ { suggestions(q) }
+                                formatBar
+                            }
+                        }
                     }
+                    .task(id: mentionQ) { if let q = mentionQ { await mentions.search(q, app: app) } }
             }
         }
+        .task(id: participants) { await mentions.resolve(participants, app: app) }
         .alert("Link", isPresented: $linkAlert) {
             TextField("Address", text: $linkURL).keyboardType(.URL).textInputAutocapitalization(.never)
             TextField("Link text (optional)", text: $linkText)
@@ -80,12 +90,39 @@ struct TextileEditor: View {
         }
         .sheet(item: $picker) { p in
             switch p {
-            case .mention: PeoplePicker { person in
-                if let l = person.login { MentionStore.shared.remember(l, id: person.id, name: person.shortName) }
-                apply { TextileEdit.insert($0, $1, "@\(person.login ?? "user#\(person.id)") ") }
+            case .mention: PeoplePicker(search: mentions) { person in
+                apply { TextileEdit.insert($0, $1, mentionText(person)) }
             }
             case .issue: IssuePicker(title: "Link to issue") { issue in apply { TextileEdit.insert($0, $1, "#\(issue.id) ") } }
             }
+        }
+    }
+
+    /// Запрос «@…» у курсора (spec 8.1); в предпросмотре и без курсора — нет.
+    private var mentionQ: String? {
+        guard !preview, case .selection(let r)? = selection?.indices, r.isEmpty, r.upperBound <= text.endIndex else { return nil }
+        return mentionQuery(text, cursor: text.utf16.distance(from: text.startIndex, to: r.upperBound))
+    }
+
+    /// Подсказка над клавиатурой: выбор заменяет «@запрос» на «@login ».
+    @ViewBuilder
+    private func suggestions(_ q: String) -> some View {
+        let list = mentions.candidates(q)
+        if !list.isEmpty {
+            Divider()
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(list) { p in
+                        Button {
+                            guard let c = cursor else { return }
+                            apply { t, _ in TextileEdit.insert(t, (c - q.count - 1)..<c, mentionText(p)) }
+                        } label: { MentionRow(person: p).padding(.horizontal, 16).padding(.vertical, 6) }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(maxHeight: min(CGFloat(list.count) * 44, 180))
+            .background(.bar)
         }
     }
 
@@ -161,47 +198,33 @@ struct TextileEditor: View {
     }
 }
 
-/// Поиск человека для упоминания: People ищет по началу имени/фамилии/логина.
+/// Кнопка «Упомянуть» (spec 8.2): пустое поле — люди задачи, ввод — те же кандидаты, что у подсказки «@».
 struct PeoplePicker: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
-    let onPick: (Person) -> Void
+    let search: MentionSearch
+    let onPick: (MentionPerson) -> Void
     @State private var query = ""
-    @State private var people: [Person] = []
-    @State private var error: String?
 
     var body: some View {
+        let list = search.candidates(query)
         NavigationStack {
-            List(people) { p in
+            List(list) { p in
                 Button {
                     onPick(p)
                     dismiss()
-                } label: {
-                    HStack {
-                        Avatar(name: p.shortName, userId: p.id)
-                        VStack(alignment: .leading) {
-                            Text(p.displayName.isEmpty ? (p.login ?? "") : p.displayName)
-                            if let l = p.login { Text(verbatim: "@\(l)").font(.caption).foregroundStyle(.secondary) }
-                        }
-                    }
-                }
+                } label: { MentionRow(person: p) }
                 .foregroundStyle(.primary)
             }
             .overlay {
-                if people.isEmpty {
-                    if let error { ContentUnavailableView("Couldn’t load", systemImage: "exclamationmark.triangle", description: Text(error)) }
-                    else if !query.isEmpty { ContentUnavailableView.search(text: query) }
-                }
+                if list.isEmpty && !query.isEmpty { ContentUnavailableView.search(text: query) }
             }
             .navigationTitle("Mention someone")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Name or login"))
+            .textInputAutocapitalization(.never)
             .toolbar { ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } } }
-            .task(id: query) {
-                guard query.count >= 2, let api = app.api else { people = []; return }
-                try? await Task.sleep(for: .milliseconds(300))
-                do { people = try await api.searchPeople(query, limit: 20); error = nil } catch { if !(error is CancellationError) { self.error = error.localizedDescription } }
-            }
+            .task(id: query) { await search.search(query.trimmingCharacters(in: .whitespaces), app: app) }
         }
         .presentationDetents([.medium, .large])
     }

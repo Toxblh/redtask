@@ -24,7 +24,7 @@ struct CommentSheet: View {
                 options
                 Divider()
                 TextileEditor(text: text, attachments: model.issue?.attachments ?? [],
-                              pendingNames: model.draftFiles.map(\.name), previewMode: $preview, fills: true)
+                              pendingNames: model.draftFiles.map(\.name), participants: model.issue.map(issueParticipants) ?? [], previewMode: $preview, fills: true)
                     .padding(.top, 8)
                 if editing == nil && !model.draftFiles.isEmpty { files }
                 if let note = privacyNote {

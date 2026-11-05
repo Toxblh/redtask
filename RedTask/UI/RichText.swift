@@ -55,8 +55,71 @@ final class MentionStore {
         }
     }
 
+    /// Все встреченные сотрудники — кэш для подсказки упоминаний (spec 8.1).
+    var people: [MentionPerson] {
+        known.map { MentionPerson(id: $0.value.0, name: $0.value.1, login: $0.key) }.sorted { $0.name < $1.name }
+    }
+
     func clear() { known = [:]; tried = [] }
 }
+
+/// Подсказка упоминаний (spec 8): люди задачи с логинами, ответы people.json?search= и общий кэш сотрудников.
+@MainActor @Observable
+final class MentionSearch {
+    private(set) var participants: [MentionPerson] = []
+    private var hits: [MentionPerson] = []
+    private var resolved: [Named] = []
+
+    func candidates(_ q: String) -> [MentionPerson] {
+        mentionCandidates(participants: participants, people: hits + MentionStore.shared.people, query: q, limit: 8)
+    }
+
+    /// Логины людей задачи: из кэша сотрудников, иначе профиль (users/:id или People).
+    func resolve(_ named: [Named], app: AppModel) async {
+        guard named != resolved else { return }
+        resolved = named
+        func login(_ id: Int) -> String { MentionStore.shared.known.first { $0.value.0 == id }?.key ?? "" }
+        participants = named.map { MentionPerson(id: $0.id, name: $0.name, login: login($0.id)) }
+        for (n, p) in participants.enumerated() where p.login.isEmpty {
+            guard let person = try? await app.refs?.person(p.id), let l = person.login, !l.isEmpty,
+                  n < participants.count, participants[n].id == p.id else { continue }
+            MentionStore.shared.remember(l, id: p.id, name: p.name)
+            participants[n].login = l
+        }
+    }
+
+    /// Сервер — через 150 мс после последнего символа; вызывать из .task(id: запрос): отменённый (устаревший) ответ не берём.
+    func search(_ q: String, app: AppModel) async {
+        guard !q.isEmpty, let api = app.api else { return }
+        try? await Task.sleep(for: .milliseconds(150))
+        guard !Task.isCancelled, let found = try? await api.searchPeople(q, limit: 8), !Task.isCancelled else { return }
+        hits = found.compactMap { p in
+            guard let l = p.login, !l.isEmpty else { return nil }
+            let name = p.shortName.isEmpty ? l : p.shortName
+            MentionStore.shared.remember(l, id: p.id, name: name)
+            return MentionPerson(id: p.id, name: name, login: l)
+        }
+    }
+}
+
+/// Строка кандидата: аватар, имя, @логин.
+struct MentionRow: View {
+    let person: MentionPerson
+    var body: some View {
+        HStack {
+            Avatar(name: person.name, userId: person.id, size: 28)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(person.name.isEmpty ? person.login : person.name).lineLimit(1)
+                if !person.login.isEmpty { Text(verbatim: "@\(person.login)").font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+            }
+            Spacer(minLength: 0)
+        }
+        .contentShape(Rectangle())
+    }
+}
+
+/// Текст упоминания: @login, без логина — user#id.
+func mentionText(_ p: MentionPerson) -> String { p.login.isEmpty ? "user#\(p.id) " : "@\(p.login) " }
 
 /// Аватары упоминаний для вставки в текст: маленькие круглые картинки, нарисованные заранее.
 @MainActor @Observable
