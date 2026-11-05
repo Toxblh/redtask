@@ -144,9 +144,45 @@ actor ImageStore {
         }
     }
 
+    /// Встроенная миниатюра ещё не скачанного документа (spec 4.1). Итог — миниатюра или отметка «нет» — навсегда
+    /// рядом с местом файла (каталог вложения, чистится при выходе). Не больше двух запросов сразу; вызывается из
+    /// .task строки — ушла с экрана, запрос отменяется.
+    func remoteEmbedded(_ a: Attachment, api: RedmineAPI, account: String) async -> UIImage? {
+        let key = "embedded-\(a.id)"
+        if let m = mem[key] { return m }
+        let file = Files.attachment(a, account: account), dir = file.deletingLastPathComponent()
+        let thumb = dir.appending(path: ".thumbnail"), none = dir.appending(path: ".nothumb")
+        if FileManager.default.fileExists(atPath: none.path) { return nil }
+        if let d = try? Data(contentsOf: thumb), let img = UIImage(data: d) { remember(key, img); return img }
+        await Self.gate.wait()
+        defer { Task { await Self.gate.signal() } }
+        // сбой или отмена — без отметки, спросим при следующем показе; честное «нет» — отметкой
+        let d: Data?
+        do { d = try await api.remoteEmbeddedThumbnail(a, saveTo: file) } catch { return nil }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard let d, let img = UIImage(data: d) else { try? Data().write(to: none); return nil }
+        try? d.write(to: thumb, options: .atomic)
+        remember(key, img)
+        return img
+    }
+
+    private static let gate = Gate(2)
+
     func image(_ url: String, api: RedmineAPI, account: String) async -> UIImage? {
         await load("img-\(url.hashValue)", account: account, disk: false) { try await api.download(url) }
     }
+}
+
+/// Не больше n одновременно. ponytail: отменённый в очереди всё равно дожидается места и сразу его отдаёт.
+actor Gate {
+    private var free: Int
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    init(_ n: Int) { free = n }
+    func wait() async {
+        if free > 0 { free -= 1; return }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+    func signal() { if waiting.isEmpty { free += 1 } else { waiting.removeFirst().resume() } }
 }
 
 /// Аватар: фото из профиля People или инициалы на цветном круге.

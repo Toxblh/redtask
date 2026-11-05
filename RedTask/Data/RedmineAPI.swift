@@ -662,6 +662,53 @@ final class RedmineAPI: Sendable {
         return data
     }
 
+    /**
+     Миниатюра документа без открытия (spec 4.1). GET с Range: bytes=-65536:
+     206 — хвост, zipTailEntry, второй Range только за запись миниатюры;
+     200 (Range сервер не умеет) — файл ≤ 1 МБ дочитываем и кладём в кэш открытия (saveTo), больше — рвём сразу.
+     nil — миниатюры нет (или файл велик); исключение — сбой, спросить позже.
+     */
+    @concurrent
+    func remoteEmbeddedThumbnail(_ a: Attachment, saveTo file: URL) async throws -> Data? {
+        guard let u = URL(string: a.contentUrl) else { return nil }
+        var req = request(own(u), accept: "*/*")
+        req.setValue("bytes=-65536", forHTTPHeaderField: "Range")
+        let (bytes, resp) = try await session.bytes(for: req)
+        defer { bytes.task.cancel() } // недочитанное тело не качаем
+        guard let http = resp as? HTTPURLResponse else { throw RedmineError(code: 0, message: "No HTTP response") }
+        func body(_ limit: Int) async throws -> Data {
+            var d = Data()
+            for try await b in bytes { d.append(b); if d.count > limit { break } }
+            return d
+        }
+        let html = (http.value(forHTTPHeaderField: "Content-Type") ?? "").contains("html") // капча WAF
+        switch http.statusCode {
+        case 206:
+            let tail = try await body(65536)
+            let size = http.value(forHTTPHeaderField: "Content-Range")?.split(separator: "/").last.flatMap { Int($0) } ?? a.filesize
+            guard let e = zipTailEntry(size: size, tail: tail), e.localOffset >= 0 else { return nil }
+            let base = size - tail.count
+            if e.localOffset >= base { return zipEntryData(e, local: tail.subdata(in: (e.localOffset - base)..<tail.count)) }
+            // ponytail: extra локального заголовка берём с запасом 4 КБ; длиннее — миниатюры не будет
+            var r2 = request(own(u), accept: "*/*")
+            r2.setValue("bytes=\(e.localOffset)-\(min(size, e.localOffset + 30 + e.name.utf8.count + e.compressedSize + 4096) - 1)", forHTTPHeaderField: "Range")
+            let (d, h2) = try await session.data(for: r2)
+            guard (h2 as? HTTPURLResponse)?.statusCode == 206 else { throw RedmineError(code: 0, message: "Range") }
+            return zipEntryData(e, local: d)
+        case 200 where !html:
+            let limit = 1 << 20
+            let length = http.expectedContentLength > 0 ? Int(http.expectedContentLength) : a.filesize
+            guard length <= limit else { return nil }
+            let d = try await body(limit)
+            guard d.count <= limit else { return nil }
+            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? d.write(to: file, options: .atomic)
+            return embeddedThumbnail(d)
+        case 403, 404, 416: return nil
+        default: throw RedmineError(code: http.statusCode, message: "HTTP \(http.statusCode)")
+        }
+    }
+
     func attachment(_ id: Int) async throws -> Attachment { try await (get("attachments/\(id).json") as AttachmentResponse).attachment }
     func deleteAttachment(_ id: Int) async throws { try await delete("attachments/\(id).json") }
 

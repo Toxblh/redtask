@@ -173,7 +173,7 @@ struct IssueDetailView: View {
                     ForEach(issue.watchers) { w in
                         Button { sheet = .person(w.id) } label: { PersonLine(person: w) }.buttonStyle(.plain)
                     }
-                }
+                }.id("watchers")
             }
             Section {
                 activityRows(issue, me: me, ctx: ctx)
@@ -424,7 +424,7 @@ struct IssueDetailView: View {
                 if canManage {
                     Button { sheet = .relation } label: { Label("Add relation", systemImage: "link.badge.plus") }
                 }
-            }
+            }.id("relations")
         }
     }
 
@@ -457,7 +457,7 @@ struct IssueDetailView: View {
                         Label("Add files", systemImage: "paperclip")
                     }
                 }
-            }
+            }.id("files")
         }
     }
 
@@ -929,8 +929,9 @@ struct AttachmentRow: View {
             case .server: thumb = await ImageStore.shared.thumbnail(attachment.id, api: api, account: app.account)
             case .embedded:
                 let file = Files.attachment(attachment, account: app.account)
-                guard FileManager.default.fileExists(atPath: file.path) else { return }
-                thumb = await ImageStore.shared.embedded(file, id: attachment.id, account: app.account)
+                thumb = FileManager.default.fileExists(atPath: file.path)
+                    ? await ImageStore.shared.embedded(file, id: attachment.id, account: app.account)
+                    : await ImageStore.shared.remoteEmbedded(attachment, api: api, account: app.account)
             case .none: break
             }
         }
