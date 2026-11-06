@@ -88,6 +88,8 @@ final class IssueDetailModel {
     private(set) var activities: [TimeEntryActivity] = []
     private(set) var members: [Named] = []
     private(set) var cfLabels: [Int: String] = [:]
+    /// Листы согласования (spec 10): из HTML страницы задачи, в REST их нет.
+    private(set) var customTables: [CustomTable] = []
     /// Состояние подзадач и связанных задач — для подписей (тема, статус).
     private(set) var related: [Int: Issue] = [:]
     /// Комментарии, править которые сервер отказал.
@@ -114,9 +116,18 @@ final class IssueDetailModel {
         if issue == nil, let snap = await IssueCache.load(app.account, issueId) {
             issue = snap.issue
             timeEntries = snap.timeEntries
+            customTables = snap.customTables ?? []
         }
         loading = true
         defer { loading = false }
+        // страница задачи — параллельно с JSON и не задерживая показ; в демо страниц нет
+        if !app.isDemo {
+            Task {
+                guard let t = await api.issueCustomTables(issueId) else { return }
+                customTables = t
+                if let issue { await IssueCache.save(app.account, IssueSnapshot(issue: issue, timeEntries: timeEntries, customTables: t)) }
+            }
+        }
         do {
             async let i = api.issue(issueId)
             async let t: [TimeEntry] = (try? await api.timeEntries(issueId: issueId)) ?? []
@@ -126,7 +137,7 @@ final class IssueDetailModel {
             timeEntries = times
             error = nil
             refreshError = nil
-            await IssueCache.save(app.account, IssueSnapshot(issue: fresh, timeEntries: times))
+            await IssueCache.save(app.account, IssueSnapshot(issue: fresh, timeEntries: times, customTables: customTables))
             Task { await loadExtras(app, fresh) }
         } catch {
             if (error as? URLError)?.code == .cancelled || error is CancellationError { return }

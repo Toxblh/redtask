@@ -159,6 +159,7 @@ struct IssueDetailView: View {
         List {
             Section { header(issue) }
             Section { fields(issue) }
+            customTables()
             if let d = issue.description, !d.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Section("Description") {
                     RichText(text: d, context: ctx).padding(.vertical, 4)
@@ -349,6 +350,42 @@ struct IssueDetailView: View {
                 LabeledContent(f.name) { Text(shown).textSelection(.enabled) }
             }
         }
+    }
+
+    /// Листы согласования (spec 10): только чтение, правка — на сайте.
+    @ViewBuilder
+    private func customTables() -> some View {
+        ForEach(Array(model.customTables.enumerated()), id: \.offset) { _, t in
+            Section(t.title) {
+                ForEach(Array(t.rows.enumerated()), id: \.offset) { _, row in
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(row.enumerated()), id: \.offset) { j, cell in
+                            let column = j < t.columns.count ? t.columns[j] : ""
+                            if let id = cell.userId {
+                                Button { sheet = .person(id) } label: { PersonLine(person: Named(id: id, name: cell.text)) }.buttonStyle(.plain)
+                            } else if cell.text == "Согласовано" {
+                                HStack(spacing: 6) {
+                                    if !column.isEmpty && column != cell.text { Text(column).foregroundStyle(.secondary) }
+                                    StatusPill(status: approved, compact: true)
+                                }
+                                .font(.subheadline)
+                            } else if !cell.text.isEmpty {
+                                Text(column.isEmpty ? cell.text : "\(column): \(cell.text)").font(.subheadline).textSelection(.enabled)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+
+    /// «Согласовано» — зелёной пилюлей, как решённый статус.
+    private var approved: IssueStatus {
+        var s = IssueStatus(id: 0, name: D(), isClosed: D())
+        s.name = "Согласовано"
+        s.isClosed = true
+        return s
     }
 
     private func progressLabel(_ issue: Issue) -> some View {

@@ -186,4 +186,17 @@ struct SpecVectorsTests {
             #expect(got == want, "\(c["name"]!)")
         }
     }
+
+    @Test func customTablesCases() {
+        for c in cases("custom_tables") {
+            let out = customTables(c["html"] as! String).map { t in
+                "\(t.title) | \(t.columns) | " + t.rows.map { $0.map { "\($0.text)#\($0.userId ?? 0)" }.joined(separator: ",") }.joined(separator: " / ")
+            }
+            let want = (c["tables"] as! [[String: Any]]).map { t in
+                "\(t["title"] as! String) | \(t["columns"] as! [String]) | " + (t["rows"] as! [[[String: Any]]])
+                    .map { $0.map { "\($0["text"] as! String)#\($0["user_id"] as? Int ?? 0)" }.joined(separator: ",") }.joined(separator: " / ")
+            }
+            #expect(out == want, "\(c["name"]!)")
+        }
+    }
 }

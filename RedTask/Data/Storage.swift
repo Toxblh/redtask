@@ -208,6 +208,8 @@ enum ListCache {
 struct IssueSnapshot: Codable, Sendable {
     var issue: Issue
     var timeEntries: [TimeEntry]
+    /// Листы согласования со страницы задачи (spec 10); nil — снимок старой версии.
+    var customTables: [CustomTable]? = nil
 }
 
 enum IssueCache {

@@ -7,6 +7,46 @@ struct RedmineError: LocalizedError, Sendable {
     var errorDescription: String? { message }
 }
 
+/// Таблица плагина custom tables (лист согласования) со страницы задачи (spec 10).
+struct CustomTable: Codable, Sendable, Hashable {
+    struct Cell: Codable, Sendable, Hashable {
+        var text: String
+        var userId: Int?
+    }
+    var title: String
+    var columns: [String]
+    var rows: [[Cell]]
+}
+
+/// Таблицы custom tables из HTML страницы задачи (набор custom_tables): каждая <form data-cm-url="/custom_entities/…">,
+/// заголовок — ближайший предыдущий <p><strong>…</strong></p>, колонки и ячейки — с классом cf_*.
+func customTables(_ html: String) -> [CustomTable] {
+    func re(_ p: String) -> NSRegularExpression { try! NSRegularExpression(pattern: p, options: [.dotMatchesLineSeparators, .caseInsensitive]) }
+    let ns = html as NSString
+    func all(_ r: NSRegularExpression, _ range: NSRange) -> [NSTextCheckingResult] { r.matches(in: html, range: range) }
+    func g(_ m: NSTextCheckingResult, _ i: Int) -> String { m.range(at: i).location == NSNotFound ? "" : ns.substring(with: m.range(at: i)) }
+    func text(_ s: String) -> String {
+        let bare = s.replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+        return unraw(decodeEntities(bare)).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+    let titles = all(re(#"<p>\s*<strong>((?:(?!</p>).)*?)</strong>\s*</p>"#), NSRange(location: 0, length: ns.length))
+    let th = re(#"<th\s+class="cf_\d+[^"]*"[^>]*>(.*?)</th>"#), tbody = re(#"<tbody>(.*?)</tbody>"#), tr = re(#"<tr[^>]*>(.*?)</tr>"#)
+    let td = re(#"<td\s+class="cf_\d+[^"]*"[^>]*>(.*?)</td>"#), user = re(#"href="/users/(\d+)""#)
+    return all(re(#"<form[^>]*data-cm-url="/custom_entities/[^>]*>(.*?)</form>"#), NSRange(location: 0, length: ns.length)).map { f in
+        let title = titles.last { $0.range.location < f.range.location }.map { text(g($0, 1)) } ?? ""
+        let body = f.range(at: 1)
+        let rows = all(tbody, body).first.map { b in
+            all(tr, b.range(at: 1)).map { r in
+                all(td, r.range(at: 1)).map { c in
+                    let inner = g(c, 1)
+                    return CustomTable.Cell(text: text(inner), userId: user.firstMatch(in: inner, range: NSRange(location: 0, length: (inner as NSString).length)).flatMap { Int((inner as NSString).substring(with: $0.range(at: 1))) })
+                }
+            }
+        } ?? []
+        return CustomTable(title: title, columns: all(th, body).map { text(g($0, 1)) }, rows: rows)
+    }
+}
+
 /// Ответ WAF вместо Redmine: просили JSON, пришёл HTML с 200 и без заголовка Rails.
 func isWafChallenge(accept: String?, code: Int, contentType: String?, requestId: String?) -> Bool {
     accept == "application/json" && code == 200 && (contentType ?? "").contains("html") && requestId == nil
@@ -780,6 +820,20 @@ final class RedmineAPI: Sendable {
         // «Сотрудник #123: Отдел…» → «Сотрудник #123»
         let head = t.split(separator: ":", maxSplits: 1).first.map(String.init) ?? t
         return head.isEmpty ? t : head
+    }
+
+    /// Листы согласования (spec 10) со страницы задачи: в REST их нет. nil — страница не пришла.
+    func issueCustomTables(_ issueId: Int) async -> [CustomTable]? {
+        for attempt in 0...Self.wafRetries {
+            guard let (data, http) = try? await perform(htmlRequest("issues/\(issueId)")), (200..<300).contains(http.statusCode) else { return nil }
+            // капча WAF: HTML без заголовка Rails — повтор, как у API
+            if http.value(forHTTPHeaderField: "X-Request-Id") == nil && attempt < Self.wafRetries {
+                try? await Task.sleep(for: .milliseconds(300 * (attempt + 1)))
+                continue
+            }
+            return customTables(String(decoding: data, as: UTF8.self))
+        }
+        return nil
     }
 
     /// Поиск по сотрудникам (People): по НАЧАЛУ фамилии/имени/логина, без учёта регистра.
