@@ -293,7 +293,7 @@ private struct TableBlock: View {
         // Заливки строк нет: в Grid фон ложится на каждую ячейку по высоте её текста.
         let layout = layout
         let wide = layout?.scroll ?? ((rows.map { $0.reduce(0) { $0 + $1.span } }.max() ?? 0) > 4)
-        let grid = Grid(alignment: .leading, horizontalSpacing: 0, verticalSpacing: 0) {
+        let grid = Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                 if i > 0 { Divider().gridCellUnsizedAxes(.horizontal) }
                 GridRow {
