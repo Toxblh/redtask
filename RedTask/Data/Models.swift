@@ -333,6 +333,8 @@ struct Person: Codable, Sendable, Hashable, Identifiable {
     var managerId: Int?
     var linkedin: String?
     var background: String?
+    /// Со страницы /people/:id (spec 11), в JSON их нет; nil — не спрашивали или страница не пришла.
+    var phones: [PersonPhone]?
 
     init(id: Int, login: String? = nil, firstname: String = "", lastname: String = "") {
         self.id = id; self.login = login; self.firstname = firstname; self.lastname = lastname

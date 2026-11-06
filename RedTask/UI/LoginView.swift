@@ -183,6 +183,26 @@ struct CaptchaView: View {
     }
 }
 
+/// Страница сайта во встроенном веб-просмотре с сессией сайта (вход через сайт, капча): правка того, чего нет в API.
+struct SiteWebView: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var page = BrowserPage()
+
+    var body: some View {
+        NavigationStack {
+            WebContainer(page: page)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+                    ToolbarItem(placement: .principal) { if page.loading { ProgressView() } }
+                }
+        }
+        .task { page.load(url) }
+    }
+}
+
 /// Кнопка «Решить капчу» — видна, только пока сервер отвечает капчей, а автоповтор её не прошёл.
 struct CaptchaButton: View {
     @Environment(AppModel.self) private var app

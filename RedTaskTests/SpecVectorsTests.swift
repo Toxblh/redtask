@@ -191,10 +191,12 @@ struct SpecVectorsTests {
         for c in cases("custom_tables") {
             let out = customTables(c["html"] as! String).map { t in
                 "\(t.title) | \(t.columns) | " + t.rows.map { $0.map { "\($0.text)#\($0.userId ?? 0)" }.joined(separator: ",") }.joined(separator: " / ")
+                    + " | \(t.tableId ?? 0) | \(t.rowIds.map { $0 ?? 0 })"
             }
             let want = (c["tables"] as! [[String: Any]]).map { t in
                 "\(t["title"] as! String) | \(t["columns"] as! [String]) | " + (t["rows"] as! [[[String: Any]]])
                     .map { $0.map { "\($0["text"] as! String)#\($0["user_id"] as? Int ?? 0)" }.joined(separator: ",") }.joined(separator: " / ")
+                    + " | \(t["table_id"] as? Int ?? 0) | \((t["row_ids"] as! [Any]).map { $0 as? Int ?? 0 })"
             }
             #expect(out == want, "\(c["name"]!)")
         }
@@ -211,6 +213,14 @@ struct SpecVectorsTests {
             let want = c["options"] as! [[String: Any]]
             #expect(out.map(\.key) == want.map { $0["key"] as! String }, "\(c["status"]!)")
             #expect(out.map(\.count) == want.map { $0["count"] as! Int }, "\(c["status"]!)")
+        }
+    }
+
+    @Test func peoplePhonesCases() {
+        for c in cases("people_phones") {
+            let out = peoplePhones(c["html"] as! String).map { "\($0.text)|\($0.tel)" }
+            let want = (c["phones"] as! [[String: Any]]).map { "\($0["text"] as! String)|\($0["tel"] as! String)" }
+            #expect(out == want, "\(c["name"]!)")
         }
     }
 }

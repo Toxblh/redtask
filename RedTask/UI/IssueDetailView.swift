@@ -20,8 +20,12 @@ enum DetailSheet: Identifiable {
     case comment, time(TimeEntry?), relation, edit, person(Int), upload([PickedFile])
     /// Выделение текста комментария (journal) или описания (nil) для частичной цитаты.
     case select(String, Journal?)
+    /// Строка листа согласования (spec 10) и страница сайта с сессией (правка строки, «Добавить»).
+    case tableRow(CustomTable, Int), site(URL)
     var id: String {
         switch self {
+        case .tableRow(let t, let i): "row-\(t.title)-\(i)"
+        case .site(let u): "site-\(u.absoluteString)"
         case .comment: "comment"
         case .select(_, let j): "select-\(j?.id ?? 0)"
         case .time(let e): "time-\(e?.id ?? 0)"
@@ -43,6 +47,8 @@ struct IssueDetailView: View {
 
     @State private var model: IssueDetailModel
     @State private var tab: ActivityTab = .comments
+    /// Обновление жестом: у него свой системный индикатор (spec 12).
+    @State private var pulling = false
     @State private var sheet: DetailSheet?
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var importing = false
@@ -81,6 +87,11 @@ struct IssueDetailView: View {
                 case "time": sheet = .time(nil)
                 case "relation": sheet = .relation
                 case "person": sheet = .person(UserDefaults.standard.integer(forKey: "RTPerson"))
+                case "row": // первая строка первого листа согласования (spec 10)
+                    Task {
+                        for _ in 0..<30 where model.customTables.first?.rows.isEmpty ?? true { try? await Task.sleep(for: .milliseconds(500)) }
+                        if let t = model.customTables.first, !t.rows.isEmpty { sheet = .tableRow(t, 0) }
+                    }
                 default: break
                 }
                 #endif
@@ -200,7 +211,7 @@ struct IssueDetailView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .refreshable { await model.load(app) }
+        .refreshable { pulling = true; await model.load(app); pulling = false }
         .frame(maxWidth: 900)
         .frame(maxWidth: .infinity)
     }
@@ -230,10 +241,7 @@ struct IssueDetailView: View {
                 .textSelection(.enabled)
             Text("Created by \(issue.author.name) · \(Fmt.dateTime(issue.createdOn))")
                 .font(.footnote).foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                StatusPill(status: issue.status)
-                if model.busy || model.loading { ProgressView().controlSize(.small) }
-            }
+            StatusPill(status: issue.status)
             if let e = model.refreshError {
                 Label {
                     Text("Couldn’t refresh: \(e)")
@@ -352,40 +360,48 @@ struct IssueDetailView: View {
         }
     }
 
-    /// Листы согласования (spec 10): только чтение, правка — на сайте.
+    /// Листы согласования (spec 10): только чтение; строка — карточка, правка и «Добавить» — на сайте.
     @ViewBuilder
     private func customTables() -> some View {
         ForEach(Array(model.customTables.enumerated()), id: \.offset) { _, t in
-            Section(t.title) {
-                ForEach(Array(t.rows.enumerated()), id: \.offset) { _, row in
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(row.enumerated()), id: \.offset) { j, cell in
-                            let column = j < t.columns.count ? t.columns[j] : ""
-                            if let id = cell.userId {
-                                Button { sheet = .person(id) } label: { PersonLine(person: Named(id: id, name: cell.text)) }.buttonStyle(.plain)
-                            } else if cell.text == "Согласовано" {
-                                HStack(spacing: 6) {
-                                    if !column.isEmpty && column != cell.text { Text(column).foregroundStyle(.secondary) }
-                                    StatusPill(status: approved, compact: true)
-                                }
-                                .font(.subheadline)
-                            } else if !cell.text.isEmpty {
-                                Text(column.isEmpty ? cell.text : "\(column): \(cell.text)").font(.subheadline).textSelection(.enabled)
-                            }
-                        }
+            Section {
+                ForEach(Array(t.rows.enumerated()), id: \.offset) { i, row in
+                    Button { sheet = .tableRow(t, i) } label: { customRow(t, row) }
+                        .buttonStyle(.plain)
+                }
+            } header: {
+                HStack {
+                    Text(t.title)
+                    Spacer()
+                    if let tid = t.tableId, !app.isDemo,
+                       let u = app.api?.url("custom_entities/new", [("custom_table_id", String(tid)), ("issue_id", String(issueId))]) {
+                        Button("Add", systemImage: "plus") { sheet = .site(u) }.labelStyle(.titleAndIcon).font(.subheadline).textCase(nil)
                     }
-                    .padding(.vertical, 2)
                 }
             }
         }
     }
 
-    /// «Согласовано» — зелёной пилюлей, как решённый статус.
-    private var approved: IssueStatus {
-        var s = IssueStatus(id: 0, name: D(), isClosed: D())
-        s.name = "Согласовано"
-        s.isClosed = true
-        return s
+    private func customRow(_ t: CustomTable, _ row: [CustomTable.Cell]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(Array(row.enumerated()), id: \.offset) { j, cell in
+                let column = j < t.columns.count ? t.columns[j] : ""
+                if let id = cell.userId {
+                    PersonLine(person: Named(id: id, name: cell.text))
+                } else if cell.text == "Согласовано" {
+                    HStack(spacing: 6) {
+                        if !column.isEmpty && column != cell.text { Text(column).foregroundStyle(.secondary) }
+                        StatusPill(status: approvedStatus, compact: true)
+                    }
+                    .font(.subheadline)
+                } else if !cell.text.isEmpty {
+                    Text(column.isEmpty ? cell.text : "\(column): \(cell.text)").font(.subheadline)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private func progressLabel(_ issue: Issue) -> some View {
@@ -598,13 +614,18 @@ struct IssueDetailView: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
-            Button {
-                app.toggleFavorite(issueId)
-            } label: {
-                Label(app.isFavorite(issueId) ? "Remove from Favorites" : "Add to Favorites",
-                      systemImage: app.isFavorite(issueId) ? "star.fill" : "star")
+            // spec 12: обновление без жеста (после правки и т. п.) — индикатор на месте звезды, задача на экране
+            if (model.loading || model.busy) && !pulling && model.issue != nil {
+                ProgressView()
+            } else {
+                Button {
+                    app.toggleFavorite(issueId)
+                } label: {
+                    Label(app.isFavorite(issueId) ? "Remove from Favorites" : "Add to Favorites",
+                          systemImage: app.isFavorite(issueId) ? "star.fill" : "star")
+                }
+                .tint(app.isFavorite(issueId) ? .yellow : nil)
             }
-            .tint(app.isFavorite(issueId) ? .yellow : nil)
             if let issue = model.issue { moreMenu(issue) }
         }
     }
@@ -677,6 +698,11 @@ struct IssueDetailView: View {
                 if let j { model.reply(to: j, text: sel) } else { model.quoteDescription(sel) }
                 sheet = .comment
             }
+        case .tableRow(let t, let i):
+            CustomRowSheet(table: t, row: i) { url in sheet = .site(url) }
+        case .site(let url):
+            // правка на сайте — после закрытия задача перечитывается
+            SiteWebView(url: url).onDisappear { Task { await model.load(app) } }
         }
     }
 

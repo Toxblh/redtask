@@ -768,6 +768,16 @@
         }
       }
     },
+    "Copy" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копировать"
+          }
+        }
+      }
+    },
     "Copy identifier" : {
       "localizations" : {
         "ru" : {
@@ -2325,6 +2335,16 @@
         }
       }
     },
+    "Open on website" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Открыть на сайте"
+          }
+        }
+      }
+    },
     "Open profile in Redmine" : {
       "localizations" : {
         "ru" : {
@@ -2421,6 +2441,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Табельный №"
+          }
+        }
+      }
+    },
+    "Phone" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Телефон"
           }
         }
       }

@@ -343,4 +343,7 @@ RU = {
 "More assignees": "Ещё исполнители",
 "As board": "Доской",
 "No subtasks": "Подзадач нет",
+"Copy": "Копировать",
+"Phone": "Телефон",
+"Open on website": "Открыть на сайте",
 }

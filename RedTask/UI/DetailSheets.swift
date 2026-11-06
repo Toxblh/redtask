@@ -339,6 +339,13 @@ private struct PersonPage: View {
                         }
                     }
                     if let m = p.mailAddr, let u = URL(string: "mailto:\(m)") { LabeledContent("Email") { Link(m, destination: u) } }
+                    // spec 11: нажатие звонит, меню — «Копировать»
+                    ForEach(p.phones ?? [], id: \.self) { ph in
+                        LabeledContent("Phone") {
+                            if let u = URL(string: "tel:\(ph.tel)") { Link(ph.text, destination: u) } else { Text(ph.text) }
+                        }
+                        .contextMenu { Button { copyToPasteboard(ph.text) } label: { Label("Copy", systemImage: "doc.on.doc") } }
+                    }
                     if let l = p.login { LabeledContent("Login", value: l).textSelection(.enabled) }
                     if let n = p.personnelNumber, !n.isEmpty { LabeledContent("Personnel No.", value: n) }
                     if let li = p.linkedin, !li.isEmpty, let u = URL(string: li) {
@@ -424,5 +431,53 @@ private struct SelectableText: UIViewRepresentable {
             }
             return UIMenu(children: [quote] + suggestedActions)
         }
+    }
+}
+
+/// «Согласовано» — зелёной пилюлей, как решённый статус (spec 10).
+let approvedStatus: IssueStatus = {
+    var s = IssueStatus(id: 0, name: D(), isClosed: D())
+    s.name = "Согласовано"
+    s.isClosed = true
+    return s
+}()
+
+/// Карточка строки листа согласования (spec 10): все колонки («—» для пустых), согласующий — карточка человека,
+/// «Открыть на сайте» — строка в веб-просмотре с сессией сайта (история и правка).
+struct CustomRowSheet: View {
+    @Environment(AppModel.self) private var app
+    @Environment(\.dismiss) private var dismiss
+    let table: CustomTable
+    let row: Int
+    let openSite: (URL) -> Void
+
+    var body: some View {
+        let cells = table.rows[row]
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(Array(cells.enumerated()), id: \.offset) { j, cell in
+                        let column = j < table.columns.count ? table.columns[j] : ""
+                        if let id = cell.userId {
+                            NavigationLink(value: id) {
+                                LabeledContent(column) { PersonLine(person: Named(id: id, name: cell.text), size: 24) }
+                            }
+                        } else if cell.text == "Согласовано" {
+                            LabeledContent(column) { StatusPill(status: approvedStatus, compact: true) }
+                        } else {
+                            LabeledContent(column, value: cell.text.isEmpty ? "—" : cell.text).textSelection(.enabled)
+                        }
+                    }
+                }
+                if let id = table.rowIds.indices.contains(row) ? table.rowIds[row] : nil, let base = app.api?.baseURL, !app.isDemo {
+                    Button("Open on website", systemImage: "safari") { openSite(base.appendingPathComponent("custom_entities/\(id)")) }
+                }
+            }
+            .navigationTitle(table.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: Int.self) { PersonPage(userId: $0) }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

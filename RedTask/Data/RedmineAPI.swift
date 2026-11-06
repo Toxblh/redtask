@@ -16,6 +16,10 @@ struct CustomTable: Codable, Sendable, Hashable {
     var title: String
     var columns: [String]
     var rows: [[Cell]]
+    /// custom_table_id из ссылки «Добавить» над таблицей; nil — ссылки нет (нет права).
+    var tableId: Int?
+    /// id строк (ids[] в строке) — для «Открыть на сайте».
+    var rowIds: [Int?] = []
 }
 
 /// Таблицы custom tables из HTML страницы задачи (набор custom_tables): каждая <form data-cm-url="/custom_entities/…">,
@@ -32,18 +36,42 @@ func customTables(_ html: String) -> [CustomTable] {
     let titles = all(re(#"<p>\s*<strong>((?:(?!</p>).)*?)</strong>\s*</p>"#), NSRange(location: 0, length: ns.length))
     let th = re(#"<th\s+class="cf_\d+[^"]*"[^>]*>(.*?)</th>"#), tbody = re(#"<tbody>(.*?)</tbody>"#), tr = re(#"<tr[^>]*>(.*?)</tr>"#)
     let td = re(#"<td\s+class="cf_\d+[^"]*"[^>]*>(.*?)</td>"#), user = re(#"href="/users/(\d+)""#)
+    let addLink = re(#"custom_table_id=(\d+)"#), rowId = re(#"name="ids\[\]"[^>]*value="(\d+)""#)
+    var prevEnd = 0
     return all(re(#"<form[^>]*data-cm-url="/custom_entities/[^>]*>(.*?)</form>"#), NSRange(location: 0, length: ns.length)).map { f in
         let title = titles.last { $0.range.location < f.range.location }.map { text(g($0, 1)) } ?? ""
+        let tableId = all(addLink, NSRange(location: prevEnd, length: f.range.location - prevEnd)).last.flatMap { Int(g($0, 1)) }
+        prevEnd = f.range.location + f.range.length
         let body = f.range(at: 1)
-        let rows = all(tbody, body).first.map { b in
-            all(tr, b.range(at: 1)).map { r in
-                all(td, r.range(at: 1)).map { c in
-                    let inner = g(c, 1)
-                    return CustomTable.Cell(text: text(inner), userId: user.firstMatch(in: inner, range: NSRange(location: 0, length: (inner as NSString).length)).flatMap { Int((inner as NSString).substring(with: $0.range(at: 1))) })
-                }
+        let trs = all(tbody, body).first.map { all(tr, $0.range(at: 1)) } ?? []
+        let rows = trs.map { r in
+            all(td, r.range(at: 1)).map { c in
+                let inner = g(c, 1)
+                return CustomTable.Cell(text: text(inner), userId: user.firstMatch(in: inner, range: NSRange(location: 0, length: (inner as NSString).length)).flatMap { Int((inner as NSString).substring(with: $0.range(at: 1))) })
             }
-        } ?? []
-        return CustomTable(title: title, columns: all(th, body).map { text(g($0, 1)) }, rows: rows)
+        }
+        let ids = trs.map { r in rowId.firstMatch(in: html, range: r.range(at: 1)).flatMap { Int(g($0, 1)) } }
+        return CustomTable(title: title, columns: all(th, body).map { text(g($0, 1)) }, rows: rows, tableId: tableId, rowIds: ids)
+    }
+}
+
+/// Телефон из профиля People: как на сайте и для набора (tel:, добавочный — через запятую).
+struct PersonPhone: Codable, Sendable, Hashable {
+    var text: String
+    var tel: String
+}
+
+/// Телефоны со страницы /people/:id (набор people_phones): <div class="value phones">, в нём <span class="value">.
+func peoplePhones(_ html: String) -> [PersonPhone] {
+    guard let block = html.firstMatch(of: /(?s)<div class="value phones">(.*?)<\/div>/)?.1 else { return [] }
+    return block.matches(of: /(?s)<span class="value">(.*?)<\/span>/).compactMap { m in
+        let bare = String(m.1).replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+        let text = unraw(decodeEntities(bare)).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard !text.isEmpty else { return nil }
+        let parts = text.firstMatch(of: /(?i)^(.*?)\s*(?:доб\.?|ext\.?|x)\s*(\d+)\s*$/)
+        let main = parts.map { String($0.1) } ?? text
+        let digits = (main.hasPrefix("+") ? "+" : "") + main.filter(\.isASCII).filter(\.isNumber)
+        return PersonPhone(text: text, tel: digits + (parts.map { ",\($0.2)" } ?? ""))
     }
 }
 
@@ -822,18 +850,28 @@ final class RedmineAPI: Sendable {
         return head.isEmpty ? t : head
     }
 
+    /// HTML-страница сайта с Basic-ключом; капча WAF (200 + HTML без заголовка Rails) — повтор, как у API.
+    private func htmlPage(_ path: String) async throws -> (Data, HTTPURLResponse) {
+        var attempt = 0
+        while true {
+            let (data, http) = try await perform(htmlRequest(path))
+            guard (200..<300).contains(http.statusCode), http.value(forHTTPHeaderField: "X-Request-Id") == nil,
+                  attempt < Self.wafRetries else { return (data, http) }
+            attempt += 1
+            try await Task.sleep(for: .milliseconds(300 * attempt))
+        }
+    }
+
     /// Листы согласования (spec 10) со страницы задачи: в REST их нет. nil — страница не пришла.
     func issueCustomTables(_ issueId: Int) async -> [CustomTable]? {
-        for attempt in 0...Self.wafRetries {
-            guard let (data, http) = try? await perform(htmlRequest("issues/\(issueId)")), (200..<300).contains(http.statusCode) else { return nil }
-            // капча WAF: HTML без заголовка Rails — повтор, как у API
-            if http.value(forHTTPHeaderField: "X-Request-Id") == nil && attempt < Self.wafRetries {
-                try? await Task.sleep(for: .milliseconds(300 * (attempt + 1)))
-                continue
-            }
-            return customTables(String(decoding: data, as: UTF8.self))
-        }
-        return nil
+        guard let (data, http) = try? await htmlPage("issues/\(issueId)"), (200..<300).contains(http.statusCode) else { return nil }
+        return customTables(String(decoding: data, as: UTF8.self))
+    }
+
+    /// Телефоны (spec 11): в people/:id.json их нет, только на странице /people/:id. nil — страница не пришла.
+    func personPhones(_ userId: Int) async -> [PersonPhone]? {
+        guard let (data, http) = try? await htmlPage("people/\(userId)"), (200..<300).contains(http.statusCode) else { return nil }
+        return peoplePhones(String(decoding: data, as: UTF8.self))
     }
 
     /// Поиск по сотрудникам (People): по НАЧАЛУ фамилии/имени/логина, без учёта регистра.
@@ -843,8 +881,11 @@ final class RedmineAPI: Sendable {
 
     /// Профиль: People → /users/:id → имя со страницы /people/:id.
     func person(_ userId: Int) async throws -> Person {
-        do { return try await (get("people/\(userId).json") as PeopleResponse).person }
-        catch let e as RedmineError where e.code == 404 || e.code == 403 {
+        do {
+            var p = try await (get("people/\(userId).json") as PeopleResponse).person
+            p.phones = await personPhones(userId)
+            return p
+        } catch let e as RedmineError where e.code == 404 || e.code == 403 {
             do {
                 let u = try await (get("users/\(userId).json") as UserResponse).user
                 var p = Person(id: u.id, login: u.login, firstname: u.firstname, lastname: u.lastname)
@@ -862,7 +903,7 @@ final class RedmineAPI: Sendable {
      nil — определённое «нет» (плагина нет, фото нет, нет прав); исключение — сбой, звать позже.
      */
     func avatar(_ userId: Int) async throws -> Data? {
-        let (data, http) = try await perform(htmlRequest("people/\(userId)"))
+        let (data, http) = try await htmlPage("people/\(userId)")
         if [401, 403, 404].contains(http.statusCode) { return nil }
         guard (200..<300).contains(http.statusCode) else { throw RedmineError(code: http.statusCode, message: "people: HTTP \(http.statusCode)") }
         let page = String(decoding: data, as: UTF8.self)
