@@ -1600,5 +1600,54 @@
         ]
       }
     ]
+  },
+  "people_phones": {
+    "_": "Телефоны из HTML страницы /people/:id (плагин People; в people/:id.json их нет). Блок <div class=\"value phones\">, каждый <span class=\"value\">…</span> — номер: text — текст без тегов, сущности раскрыты, пробелы схлопнуты, края обрезаны; пустые пропускаются. tel — для ссылки tel:: из основной части только «+» в начале и цифры; добавочный после «доб.», «ext.», «ext», «x» (без учёта регистра) — через запятую (пауза набора): «+74950000000,610». Нет блока — пустой список.",
+    "cases": [
+      {
+        "name": "один номер с добавочным",
+        "html": "<div class=\"attribute tel\">\n    <div class=\"label phone\">Телефоны:</div>\n    <div class=\"value phones\">\n        <span class=\"value\">+7(495)000-00-00 доб. 610 <br></span>\n    </div>\n  </div>\n  <div class=\"attribute email\"><div class=\"label\">Email:</div><div class=\"value\"><a href=\"mailto:x@example.com\">x@example.com</a></div></div>",
+        "phones": [
+          {
+            "text": "+7(495)000-00-00 доб. 610",
+            "tel": "+74950000000,610"
+          }
+        ]
+      },
+      {
+        "name": "два номера, второй мобильный",
+        "html": "<div class=\"attribute tel\">\n    <div class=\"label phone\">Телефоны:</div>\n    <div class=\"value phones\">\n        <span class=\"value\">8 (812) 000-11-22 <br></span>\n        <span class=\"value\"> +7&nbsp;900 000 33 44<br></span>\n    </div>\n  </div>\n  <div class=\"attribute email\"><div class=\"label\">Email:</div><div class=\"value\"><a href=\"mailto:x@example.com\">x@example.com</a></div></div>",
+        "phones": [
+          {
+            "text": "8 (812) 000-11-22",
+            "tel": "88120001122"
+          },
+          {
+            "text": "+7 900 000 33 44",
+            "tel": "+79000003344"
+          }
+        ]
+      },
+      {
+        "name": "ext латиницей",
+        "html": "<div class=\"attribute tel\">\n    <div class=\"label phone\">Телефоны:</div>\n    <div class=\"value phones\">\n        <span class=\"value\">+1 555 0100 ext. 42<br></span>\n    </div>\n  </div>\n  <div class=\"attribute email\"><div class=\"label\">Email:</div><div class=\"value\"><a href=\"mailto:x@example.com\">x@example.com</a></div></div>",
+        "phones": [
+          {
+            "text": "+1 555 0100 ext. 42",
+            "tel": "+15550100,42"
+          }
+        ]
+      },
+      {
+        "name": "пустой блок",
+        "html": "<div class=\"attribute tel\">\n    <div class=\"label phone\">Телефоны:</div>\n    <div class=\"value phones\">\n        <span class=\"value\"> <br></span>\n    </div>\n  </div>\n  <div class=\"attribute email\"><div class=\"label\">Email:</div><div class=\"value\"><a href=\"mailto:x@example.com\">x@example.com</a></div></div>",
+        "phones": []
+      },
+      {
+        "name": "нет блока",
+        "html": "<div class=\"attribute email\"><div class=\"value\">x@example.com</div></div>",
+        "phones": []
+      }
+    ]
   }
 }
