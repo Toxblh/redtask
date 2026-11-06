@@ -491,7 +491,6 @@ private struct AssigneeAvatars: View {
             }
         }
         .overlay(Circle().stroke(on ? Color.accentColor : Color(.systemBackground), lineWidth: on ? 3 : 2))
-        .opacity(selected.isEmpty || on ? 1 : 0.45)
     }
 
     @ViewBuilder private func rowAvatar(_ o: AssigneeOption) -> some View {
