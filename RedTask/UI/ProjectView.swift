@@ -504,7 +504,8 @@ private struct AssigneeAvatars: View {
 
     private func name(_ o: AssigneeOption) -> String {
         switch o.key {
-        case "me": app.settings.userName.isEmpty ? String(localized: "Me") : app.settings.userName
+        // как в задачах — тем же именем идёт сортировка (spec 3.2)
+        case "me": o.name.flatMap { $0.isEmpty ? nil : $0 } ?? (app.settings.userName.isEmpty ? String(localized: "Me") : app.settings.userName)
         case "none": String(localized: "Not assigned")
         default: o.name ?? o.key
         }
