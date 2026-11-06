@@ -609,3 +609,22 @@ func issueParticipants(_ issue: Issue) -> [Named] {
     return ([issue.assignedTo, issue.author] + issue.journals.reversed().map(\.user) + issue.watchers.map { Optional($0) })
         .compactMap { $0 }.filter { seen.insert($0.id).inserted }
 }
+
+/// Аватары исполнителей доски (набор assignee_avatars): все исполнители загруженных задач; count — задач на доске
+/// после фильтра статуса (open, closed, all), без аватаров и поиска. Больше задач — левее, равные — по имени, «none» последним.
+func assigneeAvatars(_ issues: [Issue], me: Int, status: String) -> [AssigneeOption] {
+    func key(_ i: Issue) -> String { i.assignedTo.map { $0.id == me ? "me" : "user:\($0.id)" } ?? "none" }
+    var names: [String: String] = [:], counts: [String: Int] = [:]
+    for i in issues {
+        let k = key(i)
+        if names[k] == nil { names[k] = i.assignedTo?.name ?? "" }
+        let shown = status == "open" ? !i.status.isClosed : status == "closed" ? i.status.isClosed : true
+        counts[k, default: 0] += shown ? 1 : 0
+    }
+    return names.keys.map { AssigneeOption(key: $0, name: $0.hasPrefix("user:") ? names[$0] : nil, count: counts[$0] ?? 0) }
+        .sorted { a, b in
+            if (a.key == "none") != (b.key == "none") { return b.key == "none" }
+            if a.count != b.count { return a.count > b.count }
+            return names[a.key]!.localizedCaseInsensitiveCompare(names[b.key]!) == .orderedAscending
+        }
+}

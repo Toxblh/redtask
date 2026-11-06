@@ -296,7 +296,8 @@ struct VersionView: View {
         @Bindable var app = app
         let all = store.issues(scope, app)
         let byStatus = (all ?? []).filter { filter == .all || (filter == .closed) == $0.status.isClosed }
-        let options = assigneeOptions(byStatus, me: app.settings.userId).filter { $0.key != "all" }
+        // порядок — по числу задач на доске после фильтра статуса (spec 3.2, assignee_avatars)
+        let options = assigneeAvatars(all ?? [], me: app.settings.userId, status: filter == .all ? "all" : filter.rawValue)
         let shown = boardFilter(byStatus, me: app.settings.userId, assignees: assignees, query: query)
         VStack(spacing: 0) {
             header(all, options: options)
@@ -336,6 +337,14 @@ struct VersionView: View {
         }
     }
 
+    private var avatarsMax: Int {
+        #if DEBUG
+        let n = UserDefaults.standard.integer(forKey: "RTAvatarsMax") // -RTAvatarsMax <n> — «+N» и на демо-вехе
+        if n > 0 { return n }
+        #endif
+        return sizeClass == .regular ? 10 : 5
+    }
+
     @ViewBuilder
     private func header(_ all: [Issue]?, options: [AssigneeOption]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -364,7 +373,7 @@ struct VersionView: View {
                 }
                 .padding(.horizontal, 8).padding(.vertical, 7)
                 .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 10))
-                AssigneeAvatars(options: options, selected: $assignees, max: sizeClass == .regular ? 10 : 5)
+                AssigneeAvatars(options: options, selected: $assignees, max: avatarsMax)
             }
         }
         .padding(.horizontal)
@@ -404,13 +413,14 @@ struct VersionView: View {
 }
 
 /// Фильтр исполнителей рядом аватаров, как в Jira: нажатие включает и выключает, можно несколько; ничего — все.
-/// «Без исполнителя» — серый кружок. Не поместилось — «+N» со списком с галочками.
+/// «Без исполнителя» — серый кружок. Не поместилось — «+N» со списком с аватарами и галочками.
 private struct AssigneeAvatars: View {
     @Environment(AppModel.self) private var app
     let options: [AssigneeOption]
     @Binding var selected: Set<String>
     let max: Int
     private let size: CGFloat = 32
+    @State private var more = false
 
     var body: some View {
         let fits = options.count <= max
@@ -425,11 +435,7 @@ private struct AssigneeAvatars: View {
                     .accessibilityAddTraits(selected.contains(o.key) ? .isSelected : [])
             }
             if !fits {
-                Menu {
-                    ForEach(options) { o in
-                        Toggle(hint(o), isOn: Binding(get: { selected.contains(o.key) }, set: { _ in toggle(o.key) }))
-                    }
-                } label: {
+                Button { more = true } label: {
                     let hidden = options.dropFirst(visible.count).filter { selected.contains($0.key) }.count
                     Text(verbatim: "+\(options.count - visible.count)")
                         .font(.caption.weight(.semibold))
@@ -438,10 +444,40 @@ private struct AssigneeAvatars: View {
                         .background(hidden > 0 ? Color.accentColor : Color(.systemGray5), in: Circle())
                         .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel(Text("More assignees"))
+                // список с аватарами и галочками; не закрывается при выборе — можно отметить несколько
+                .popover(isPresented: $more) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(options) { o in
+                                Button { toggle(o.key) } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: selected.contains(o.key) ? "checkmark.circle.fill" : "circle")
+                                            .foregroundStyle(selected.contains(o.key) ? Color.accentColor : Color.secondary)
+                                        rowAvatar(o)
+                                        Text(verbatim: "\(name(o)) · \(o.count)").lineLimit(1)
+                                        Spacer(minLength: 0)
+                                    }
+                                    .padding(.horizontal, 14).padding(.vertical, 8)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityAddTraits(selected.contains(o.key) ? .isSelected : [])
+                            }
+                        }
+                        .padding(.vertical, 6)
+                    }
+                    .frame(minWidth: 260, maxHeight: 420)
+                    .presentationCompactAdaptation(.popover)
+                }
             }
         }
         .fixedSize()
+        #if DEBUG
+        // -RTAssigneesMore — список «+N» открыт сразу (снимки)
+        .task(id: fits) { if !fits, UserDefaults.standard.bool(forKey: "RTAssigneesMore") { try? await Task.sleep(for: .seconds(1)); more = true } }
+        #endif
     }
 
     private func avatar(_ o: AssigneeOption) -> some View {
@@ -456,6 +492,14 @@ private struct AssigneeAvatars: View {
         }
         .overlay(Circle().stroke(on ? Color.accentColor : Color(.systemBackground), lineWidth: on ? 3 : 2))
         .opacity(selected.isEmpty || on ? 1 : 0.45)
+    }
+
+    @ViewBuilder private func rowAvatar(_ o: AssigneeOption) -> some View {
+        if o.key == "none" {
+            Circle().fill(Color(.systemGray3)).frame(width: 24, height: 24)
+        } else {
+            Avatar(name: name(o), userId: o.key == "me" ? app.settings.userId : Int(o.key.dropFirst(5)), size: 24)
+        }
     }
 
     private func name(_ o: AssigneeOption) -> String {

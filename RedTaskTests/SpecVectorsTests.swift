@@ -199,4 +199,18 @@ struct SpecVectorsTests {
             #expect(out == want, "\(c["name"]!)")
         }
     }
+
+    @Test func assigneeAvatarsCases() {
+        let s = section("assignee_avatars")
+        let me = s["me"] as! Int
+        let issues: [RMIssue] = (s["issues"] as! [[String: Any]]).map {
+            issue($0["id"] as! Int, status: ($0["closed"] as! Bool) ? 5 : 1, assignee: $0["assignee"])
+        }.map { var i = $0; i.status.isClosed = i.status.id == 5; return i }
+        for c in s["cases"] as! [[String: Any]] {
+            let out = assigneeAvatars(issues, me: me, status: c["status"] as! String)
+            let want = c["options"] as! [[String: Any]]
+            #expect(out.map(\.key) == want.map { $0["key"] as! String }, "\(c["status"]!)")
+            #expect(out.map(\.count) == want.map { $0["count"] as! Int }, "\(c["status"]!)")
+        }
+    }
 }
