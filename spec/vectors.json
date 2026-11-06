@@ -1318,5 +1318,135 @@
         ]
       }
     ]
+  },
+  "custom_tables": {
+    "_": "Таблицы плагина custom tables (листы согласования) из HTML страницы задачи. Каждая <form data-cm-url=\"/custom_entities/…\">; title — текст ближайшего предыдущего <p><strong>…</strong></p>; columns — текст <th> с классом cf_*; rows — <tr> из <tbody>, ячейки — <td> с классом cf_*: text — текст без тегов, HTML-сущности раскрыты, пробелы (включая &nbsp;) и переносы схлопнуты в один пробел, края обрезаны; ссылка /users/N в ячейке → user_id N. Таблица без строк тоже выдаётся.",
+    "cases": [
+      {
+        "name": "задача 1240: два листа согласования",
+        "html": "<div class=\"text_cf cf_511 attribute\"><p><strong><span>Прочтите регламент</span></strong></p></div>\n<hr />\n<p><strong>Внутреннее согласование</strong></p>\n    \n<form data-cm-url=\"/custom_entities/context_menu?back_url=%2Fissues%2F1240\" action=\"/issues/1240\" accept-charset=\"UTF-8\" name=\"form-1\" method=\"post\"><input type=\"hidden\" name=\"authenticity_token\" value=\"TOKEN\" autocomplete=\"off\" />  <input type=\"hidden\" name=\"back_url\" id=\"back_url\" value=\"/issues/1240\" autocomplete=\"off\" />\n  <div class=\"autoscroll\">\n    <table class=\"list time-entries\">\n      <thead>\n      <tr>\n        <th class=\"checkbox hide-when-print\">\n          <input type=\"checkbox\" name=\"check_all\" id=\"check_all\" value=\"\" class=\"toggle-selection\" title=\"Отметить все/Очистить\" />\n        </th>\n          <th class=\"cf_753 user\"><a title=\"Сортировать по &quot;Согласующий&quot;\" href=\"/issues/1240?sort=cf_753\">Согласующий</a></th>\n          <th class=\"cf_754 text\"><a title=\"Сортировать по &quot;Комментарий&quot;\" href=\"/issues/1240?sort=cf_754\">Комментарий</a></th>\n          <th class=\"cf_755 enumeration\"><a title=\"Сортировать по &quot;Согласовано&quot;\" href=\"/issues/1240?sort=cf_755\">Согласовано</a></th>\n          <th class=\"cf_756 date\"><a title=\"Сортировать по &quot;Дата&quot;\" href=\"/issues/1240?sort=cf_756\">Дата</a></th>\n        <th>Действия</th>\n      </tr>\n      </thead>\n      <tbody>\n        <tr class=\"cusotm-entity-odd hascontextmenu\">\n          <td class=\"checkbox hide-when-print\"><input type=\"checkbox\" name=\"ids[]\" value=\"9001\" /></td>\n          <td class=\"cf_753 user\"><a class=\"user active\" href=\"/users/501\">Петров Пётр</a></td><td class=\"cf_754 text\"></td><td class=\"cf_755 enumeration\">Согласовано</td><td class=\"cf_756 date\"></td>\n          <td class=\"buttons\">\n              <a title=\"Показать\" class=\"icon-only icon-magnifier\" href=\"/custom_entities/9001\">Показать</a>\n              <a title=\"Редактировать\" class=\"icon-only icon-edit\" data-remote=\"true\" href=\"/custom_entities/9001/edit?back_url=%2Fissues%2F1240&amp;edit_query=true&amp;project_id=pr\">Редактировать</a>\n              <a data-confirm=\"Вы уверены?\" title=\"Удалить\" class=\"icon-only icon-del\" rel=\"nofollow\" data-method=\"delete\" href=\"/custom_entities/9001?back_url=%2Fissues%2F1240&amp;custom_table_id=10\">Удалить</a>\n          </td>\n        </tr>\n        <tr class=\"cusotm-entity-even hascontextmenu\">\n          <td class=\"checkbox hide-when-print\"><input type=\"checkbox\" name=\"ids[]\" value=\"9002\" /></td>\n          <td class=\"cf_753 user\"><a class=\"user active\" href=\"/users/502\">Сидорова Анна</a></td><td class=\"cf_754 text\"></td><td class=\"cf_755 enumeration\"></td><td class=\"cf_756 date\"></td>\n          <td class=\"buttons\">\n              <a title=\"Показать\" class=\"icon-only icon-magnifier\" href=\"/custom_entities/9002\">Показать</a>\n              <a title=\"Редактировать\" class=\"icon-only icon-edit\" data-remote=\"true\" href=\"/custom_entities/9002/edit?back_url=%2Fissues%2F1240&amp;edit_query=true&amp;project_id=pr\">Редактировать</a>\n              <a data-confirm=\"Вы уверены?\" title=\"Удалить\" class=\"icon-only icon-del\" rel=\"nofollow\" data-method=\"delete\" href=\"/custom_entities/9002?back_url=%2Fissues%2F1240&amp;custom_table_id=10\">Удалить</a>\n          </td>\n        </tr>\n      </tbody>\n    </table>\n  </div>\n\n</form>\n<hr />\n<p><strong>Финальное согласование</strong></p>\n    \n<form data-cm-url=\"/custom_entities/context_menu?back_url=%2Fissues%2F1240\" action=\"/issues/1240\" accept-charset=\"UTF-8\" name=\"form-1\" method=\"post\"><input type=\"hidden\" name=\"authenticity_token\" value=\"TOKEN\" autocomplete=\"off\" />  <input type=\"hidden\" name=\"back_url\" id=\"back_url\" value=\"/issues/1240\" autocomplete=\"off\" />\n  <div class=\"autoscroll\">\n    <table class=\"list time-entries\">\n      <thead>\n      <tr>\n        <th class=\"checkbox hide-when-print\">\n          <input type=\"checkbox\" name=\"check_all\" id=\"check_all\" value=\"\" class=\"toggle-selection\" title=\"Отметить все/Очистить\" />\n        </th>\n          <th class=\"cf_757 user\"><a title=\"Сортировать по &quot;Согласующий&quot;\" href=\"/issues/1240?sort=cf_757\">Согласующий</a></th>\n          <th class=\"cf_758 text\"><a title=\"Сортировать по &quot;Комментарий&quot;\" href=\"/issues/1240?sort=cf_758\">Комментарий</a></th>\n          <th class=\"cf_759 enumeration\"><a title=\"Сортировать по &quot;Согласовано&quot;\" href=\"/issues/1240?sort=cf_759\">Согласовано</a></th>\n          <th class=\"cf_760 date\"><a title=\"Сортировать по &quot;Дата&quot;\" href=\"/issues/1240?sort=cf_760\">Дата</a></th>\n        <th>Действия</th>\n      </tr>\n      </thead>\n      <tbody>\n        <tr class=\"cusotm-entity-odd hascontextmenu\">\n          <td class=\"checkbox hide-when-print\"><input type=\"checkbox\" name=\"ids[]\" value=\"9003\" /></td>\n          <td class=\"cf_757 user\"><a class=\"user active\" href=\"/users/503\">Козлов Илья</a></td><td class=\"cf_758 text\"></td><td class=\"cf_759 enumeration\"></td><td class=\"cf_760 date\">25.08.2026</td>\n          <td class=\"buttons\">\n              <a title=\"Показать\" class=\"icon-only icon-magnifier\" href=\"/custom_entities/9003\">Показать</a>\n              <a title=\"Редактировать\" class=\"icon-only icon-edit\" data-remote=\"true\" href=\"/custom_entities/9003/edit?back_url=%2Fissues%2F1240&amp;edit_query=true&amp;project_id=pr\">Редактировать</a>\n              <a data-confirm=\"Вы уверены?\" title=\"Удалить\" class=\"icon-only icon-del\" rel=\"nofollow\" data-method=\"delete\" href=\"/custom_entities/9003?back_url=%2Fissues%2F1240&amp;custom_table_id=11\">Удалить</a>\n          </td>\n        </tr>\n        <tr class=\"cusotm-entity-even hascontextmenu\">\n          <td class=\"checkbox hide-when-print\"><input type=\"checkbox\" name=\"ids[]\" value=\"9004\" /></td>\n          <td class=\"cf_757 user\"><a class=\"user active\" href=\"/users/504\">Морозова Ольга</a></td><td class=\"cf_758 text\"></td><td class=\"cf_759 enumeration\"></td><td class=\"cf_760 date\">25.08.2026</td>\n          <td class=\"buttons\">\n              <a title=\"Показать\" class=\"icon-only icon-magnifier\" href=\"/custom_entities/9004\">Показать</a>\n              <a title=\"Редактировать\" class=\"icon-only icon-edit\" data-remote=\"true\" href=\"/custom_entities/9004/edit?back_url=%2Fissues%2F1240&amp;edit_query=true&amp;project_id=pr\">Редактировать</a>\n              <a data-confirm=\"Вы уверены?\" title=\"Удалить\" class=\"icon-only icon-del\" rel=\"nofollow\" data-method=\"delete\" href=\"/custom_entities/9004?back_url=%2Fissues%2F1240&amp;custom_table_id=11\">Удалить</a>\n          </td>\n        </tr>\n      </tbody>\n    </table>\n  </div>\n\n</form>\n<p><strong>Описание</strong></p><div class=\"wiki\"><p>текст</p></div>",
+        "tables": [
+          {
+            "title": "Внутреннее согласование",
+            "columns": [
+              "Согласующий",
+              "Комментарий",
+              "Согласовано",
+              "Дата"
+            ],
+            "rows": [
+              [
+                {
+                  "text": "Петров Пётр",
+                  "user_id": 501
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "Согласовано"
+                },
+                {
+                  "text": ""
+                }
+              ],
+              [
+                {
+                  "text": "Сидорова Анна",
+                  "user_id": 502
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                }
+              ]
+            ]
+          },
+          {
+            "title": "Финальное согласование",
+            "columns": [
+              "Согласующий",
+              "Комментарий",
+              "Согласовано",
+              "Дата"
+            ],
+            "rows": [
+              [
+                {
+                  "text": "Козлов Илья",
+                  "user_id": 503
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "25.08.2026"
+                }
+              ],
+              [
+                {
+                  "text": "Морозова Ольга",
+                  "user_id": 504
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": ""
+                },
+                {
+                  "text": "25.08.2026"
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "name": "сущности и пробелы",
+        "html": "<p><strong>Лист &amp; список</strong></p>\n<form data-cm-url=\"/custom_entities/context_menu?back_url=%2Fissues%2F1\" action=\"/issues/1\" method=\"post\"><table class=\"list\"><thead><tr><th class=\"checkbox\"></th><th class=\"cf_1 text\"><a href=\"#\">Комментарий</a></th><th>Действия</th></tr></thead><tbody><tr><td class=\"checkbox\"><input type=\"checkbox\" /></td><td class=\"cf_1 text\">  Ок,&nbsp;&quot;да&quot;\n  всё </td><td class=\"buttons\"><a href=\"/custom_entities/1\">Показать</a></td></tr></tbody></table></form>",
+        "tables": [
+          {
+            "title": "Лист & список",
+            "columns": [
+              "Комментарий"
+            ],
+            "rows": [
+              [
+                {
+                  "text": "Ок, \"да\" всё"
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      {
+        "name": "пустая таблица",
+        "html": "<p><strong>Пусто</strong></p><form data-cm-url=\"/custom_entities/context_menu?back_url=x\" method=\"post\"><table class=\"list\"><thead><tr><th class=\"cf_2 user\">Кто</th></tr></thead><tbody></tbody></table></form>",
+        "tables": [
+          {
+            "title": "Пусто",
+            "columns": [
+              "Кто"
+            ],
+            "rows": []
+          }
+        ]
+      },
+      {
+        "name": "нет таблиц",
+        "html": "<p><strong>Описание</strong></p><div>x</div>",
+        "tables": []
+      }
+    ]
   }
 }
