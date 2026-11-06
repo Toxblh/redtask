@@ -231,6 +231,8 @@ private struct IssueListPage: View {
     @Binding var selection: Int?
     @Binding var openSwipe: Int?
     @State private var actionError: String?
+    /// Обновление жестом: у него свой системный индикатор (spec 12).
+    @State private var pulling = false
 
     var body: some View {
         List(selection: $selection) {
@@ -273,7 +275,13 @@ private struct IssueListPage: View {
             }
         }
         .listStyle(.plain)
-        .refreshable { await model.load(app) }
+        .refreshable { pulling = true; await model.load(app); pulling = false }
+        // spec 12: обновление без жеста (после правки, возврат на страницу) — индикатор в панели, список на месте
+        .toolbar {
+            if active && model.loading && !pulling && !model.issues.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) { ProgressView() }
+            }
+        }
         .overlay {
             if model.issues.isEmpty {
                 if let e = model.error {

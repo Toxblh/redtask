@@ -161,11 +161,12 @@ final class VersionIssueStore {
     static let shared = VersionIssueStore()
     private var cache: [String: [Issue]] = [:]
     private var errors: [String: String] = [:]
-    private var loading = Set<String>()
+    private(set) var loading = Set<String>()
 
     private func key(_ s: BoardScope, _ app: AppModel) -> String { "\(app.account)-\(s)" }
     func issues(_ s: BoardScope, _ app: AppModel) -> [Issue]? { cache[key(s, app)] }
     func error(_ s: BoardScope, _ app: AppModel) -> String? { errors[key(s, app)] }
+    func isLoading(_ s: BoardScope, _ app: AppModel) -> Bool { loading.contains(key(s, app)) }
 
     func load(_ s: BoardScope, _ app: AppModel, force: Bool = false) async {
         let k = key(s, app)
@@ -287,6 +288,7 @@ struct VersionView: View {
     @State private var assignees = Set<String>()
     @State private var query = ""
     @State private var statusOrder: [Int] = []
+    @State private var pulling = false
     private var store: VersionIssueStore { .shared }
 
     init(version: Version) { scope = .version(version.id); title = version.name; self.version = version }
@@ -301,6 +303,11 @@ struct VersionView: View {
         let shown = boardFilter(byStatus, me: app.settings.userId, assignees: assignees, query: query)
         VStack(spacing: 0) {
             header(all, options: options)
+            if all != nil, let e = store.error(scope, app) {
+                Label { Text("Couldn’t refresh: \(e)") } icon: { Image(systemName: "exclamationmark.triangle") }
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal).padding(.bottom, 6)
+            }
             if let all {
                 if all.isEmpty {
                     ContentUnavailableView(version == nil ? "No subtasks" : "No issues in this version", systemImage: "tray").frame(maxHeight: .infinity)
@@ -311,7 +318,7 @@ struct VersionView: View {
                         NavigationLink(value: IssueLink(id: i.id)) { IssueRow(issue: i, showProject: version.map { i.project.id != $0.project?.id } ?? false) }
                     }
                     .listStyle(.plain)
-                    .refreshable { await store.load(scope, app, force: true) }
+                    .refreshable { pulling = true; await store.load(scope, app, force: true); pulling = false }
                 }
             } else if let e = store.error(scope, app) {
                 LoadErrorView(message: e) { Task { await store.load(scope, app, force: true) } }.frame(maxHeight: .infinity)
@@ -323,14 +330,21 @@ struct VersionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                // одна кнопка панели: сегменты внутри стеклянной капсулы iOS 26 выглядят пилюлей в пилюле
-                Button { app.settings.versionBoard.toggle() } label: {
-                    app.settings.versionBoard
-                        ? Label("List", systemImage: "list.bullet")
-                        : Label("Board", systemImage: "rectangle.split.3x1")
+                // spec 12: обновление без жеста (после правки задачи) — индикатор на месте кнопки, доска на экране
+                if store.isLoading(scope, app) && !pulling && all != nil {
+                    ProgressView()
+                } else {
+                    // одна кнопка панели: сегменты внутри стеклянной капсулы iOS 26 выглядят пилюлей в пилюле
+                    Button { app.settings.versionBoard.toggle() } label: {
+                        app.settings.versionBoard
+                            ? Label("List", systemImage: "list.bullet")
+                            : Label("Board", systemImage: "rectangle.split.3x1")
+                    }
                 }
             }
         }
+        // задачу поправили (статус, исполнитель) — доска перечитывается тихо
+        .onChange(of: app.listEpoch) { Task { await store.load(scope, app, force: true) } }
         .task {
             await store.load(scope, app)
             statusOrder = (try? await app.refs?.statuses())?.map(\.id) ?? []
