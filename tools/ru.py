@@ -338,4 +338,9 @@ RU = {
 "No wiki pages": "Страниц вики нет",
 "%@ · %@ · version %lld": "%1$@ · %2$@ · версия %3$lld",
 "No files": "Файлов нет",
+"Clear": "Очистить",
+"Search on board": "Поиск по доске",
+"More assignees": "Ещё исполнители",
+"As board": "Доской",
+"No subtasks": "Подзадач нет",
 }

@@ -73,6 +73,7 @@
       }
     },
     "%@ (%lld)" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -437,6 +438,16 @@
         }
       }
     },
+    "As board" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Доской"
+          }
+        }
+      }
+    },
     "Assign to me" : {
       "localizations" : {
         "ru" : {
@@ -643,6 +654,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Выбрать…"
+          }
+        }
+      }
+    },
+    "Clear" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очистить"
           }
         }
       }
@@ -1254,6 +1275,7 @@
       }
     },
     "Everyone" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ru" : {
           "stringUnit" : {
@@ -1783,6 +1805,16 @@
         }
       }
     },
+    "More assignees" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ещё исполнители"
+          }
+        }
+      }
+    },
     "Mute this issue" : {
       "localizations" : {
         "ru" : {
@@ -2039,6 +2071,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Нет под рукой сервера Redmine? Посмотрите приложение на примерах — ничего никуда не отправляется."
+          }
+        }
+      }
+    },
+    "No subtasks" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Подзадач нет"
           }
         }
       }
@@ -2729,6 +2771,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Поиск задач"
+          }
+        }
+      }
+    },
+    "Search on board" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поиск по доске"
           }
         }
       }
