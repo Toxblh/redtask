@@ -543,6 +543,7 @@ struct WikiPageView: View {
     @State private var page: WikiPage?
     @State private var error: String?
     @State private var person: Named?
+    @State private var scroll = ScrollPosition()
 
     private var webURL: URL? { app.api?.url("projects/\(ref.project)/wiki/\(ref.title)") }
 
@@ -564,6 +565,11 @@ struct WikiPageView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .refreshable { await load() }
+                .scrollPosition($scroll)
+                #if DEBUG
+                // -RTScrollY <pt> — снимки середины длинной страницы
+                .task { try? await Task.sleep(for: .milliseconds(800)); scroll.scrollTo(y: CGFloat(UserDefaults.standard.integer(forKey: "RTScrollY"))) }
+                #endif
             } else if let error {
                 LoadErrorView(message: error) { Task { await load() } }
             } else {

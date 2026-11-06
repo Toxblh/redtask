@@ -143,9 +143,14 @@ struct RootView: View {
             .onChange(of: app.openRequest) { _, r in handle(r) }
             .onAppear { handle(app.openRequest) }
             #if DEBUG
-            // -RTProject <id> [-RTVersion <id>] — снимки экранов проекта и вехи
+            // -RTProject <id> [-RTVersion <id>] — снимки экранов проекта и вехи; -RTWiki проект:Страница
             .task {
                 let d = UserDefaults.standard, pid = d.integer(forKey: "RTProject")
+                // -RTWiki проект:Страница — страница вики сразу в колонке детали
+                if projects, let w = d.string(forKey: "RTWiki")?.split(separator: ":", maxSplits: 1), w.count == 2 {
+                    page = .wiki(WikiRef(project: String(w[0]), title: String(w[1])))
+                    compactColumn = .detail
+                }
                 guard projects, pid > 0, let api = app.api, let p = try? await api.projects().first(where: { $0.id == pid }) else { return }
                 project = p
                 let vid = d.integer(forKey: "RTVersion")
