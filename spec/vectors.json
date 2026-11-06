@@ -1448,5 +1448,157 @@
         "tables": []
       }
     ]
+  },
+  "assignee_avatars": {
+    "_": "Порядок аватаров исполнителей на доске/списке (3.2) и в списке «+N». Варианты — все исполнители загруженных задач (ключи me, user:N, none). count — число задач на доске сейчас, то есть после фильтра статуса (Открытые/Закрытые/Все), без учёта выбранных аватаров и поиска. Порядок: по count по убыванию, при равенстве — по имени без учёта регистра (у me — имя из задачи); none — всегда последним. Люди с count 0 (их задачи скрыты фильтром статуса) остаются в конце, перед none.",
+    "me": 7,
+    "issues": [
+      {
+        "id": 1,
+        "closed": false,
+        "assignee": {
+          "id": 7,
+          "name": "Я Сам"
+        }
+      },
+      {
+        "id": 2,
+        "closed": false,
+        "assignee": {
+          "id": 9,
+          "name": "борис"
+        }
+      },
+      {
+        "id": 3,
+        "closed": false,
+        "assignee": null
+      },
+      {
+        "id": 4,
+        "closed": false,
+        "assignee": {
+          "id": 8,
+          "name": "Алла"
+        }
+      },
+      {
+        "id": 5,
+        "closed": false,
+        "assignee": {
+          "id": 9,
+          "name": "борис"
+        }
+      },
+      {
+        "id": 6,
+        "closed": true,
+        "assignee": {
+          "id": 5,
+          "name": "Вера"
+        }
+      },
+      {
+        "id": 7,
+        "closed": false,
+        "assignee": {
+          "id": 8,
+          "name": "Алла"
+        }
+      },
+      {
+        "id": 8,
+        "closed": false,
+        "assignee": {
+          "id": 9,
+          "name": "борис"
+        }
+      },
+      {
+        "id": 9,
+        "closed": true,
+        "assignee": {
+          "id": 7,
+          "name": "Я Сам"
+        }
+      }
+    ],
+    "cases": [
+      {
+        "status": "open",
+        "options": [
+          {
+            "key": "user:9",
+            "count": 3
+          },
+          {
+            "key": "user:8",
+            "count": 2
+          },
+          {
+            "key": "me",
+            "count": 1
+          },
+          {
+            "key": "user:5",
+            "count": 0
+          },
+          {
+            "key": "none",
+            "count": 1
+          }
+        ]
+      },
+      {
+        "status": "closed",
+        "options": [
+          {
+            "key": "user:5",
+            "count": 1
+          },
+          {
+            "key": "me",
+            "count": 1
+          },
+          {
+            "key": "user:8",
+            "count": 0
+          },
+          {
+            "key": "user:9",
+            "count": 0
+          },
+          {
+            "key": "none",
+            "count": 0
+          }
+        ]
+      },
+      {
+        "status": "all",
+        "options": [
+          {
+            "key": "user:9",
+            "count": 3
+          },
+          {
+            "key": "user:8",
+            "count": 2
+          },
+          {
+            "key": "me",
+            "count": 2
+          },
+          {
+            "key": "user:5",
+            "count": 1
+          },
+          {
+            "key": "none",
+            "count": 1
+          }
+        ]
+      }
+    ]
   }
 }
