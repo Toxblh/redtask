@@ -1667,7 +1667,7 @@
     ]
   },
   "journal_labels": {
-    "_": "Подписи изменений журнала из HTML страницы задачи (п. 14). Для каждого журнала из journals: <div id=\"change-{id}\"> → <li> из <ul class=\"journal-details\"> по порядку, в паре с details по индексу. Подписи — тексты <i> в <li>: теги сняты, HTML-сущности раскрыты, пробелы и переносы схлопнуты в один, края обрезаны. old и new оба непустые и <i> ровно два → old=первый, new=второй; непустое только одно и <i> ровно один → подпись ему, другое null; иначе оба null. Пустая строка значения считается отсутствующим значением. Число <li> не равно числу details (или блока нет) → у всех details журнала null. Результат: объект id журнала (строкой) → список {old, new} по details; журналы без details — пустой список.",
+    "_": "Подписи изменений журнала из HTML страницы задачи (п. 14). Для каждого журнала из journals: <div id=\"change-{id}\"> → <li> из <ul class=\"journal-details\">. Порядок как у Redmine: сначала details, кроме cf из multiple (id полей со многими значениями; null — пусто), по одному <li> в порядке details; затем по каждому полю из multiple в порядке первого появления: <li> «добавлены», если у поля есть details с непустым new, и <li> «удалены», если есть с непустым old. <li> поля multiple с ровно одним <i> даёт подпись: «добавлены» — new каждого добавленного (если такой detail один), «удалены» — old; иначе null. Подписи — тексты <i> в <li>: теги сняты, HTML-сущности раскрыты, пробелы и переносы схлопнуты в один, края обрезаны. old и new оба непустые и <i> ровно два → old=первый, new=второй; непустое только одно и <i> ровно один → подпись ему, другое null; иначе оба null. Пустая строка значения считается отсутствующим значением. Число <li> не равно ожидаемому (или блока нет) → у всех details журнала null. Результат: объект id журнала (строкой) → список {old, new} по details; журналы без details — пустой список.",
     "cases": [
       {
         "name": "трекер, проект, поле с пустым старым, список добавлен; вложение, описание, список удалён; не совпало число строк; журнал без блока",
@@ -1808,7 +1808,8 @@
               "new": null
             }
           ]
-        }
+        },
+        "multiple": null
       },
       {
         "name": "пустой HTML",
@@ -1831,6 +1832,102 @@
             {
               "old": null,
               "new": null
+            }
+          ]
+        },
+        "multiple": null
+      },
+      {
+        "name": "поле со многими значениями выводится после остальных; два добавленных значения одной строкой — без подписи",
+        "html": "<div id=\"change-201\" class=\"journal has-details\"><div class=\"journal-content\"><ul class=\"journal-details\"> <li>Параметр <strong>Трекер</strong> изменился с <i>Улучшение</i> на <i>Feature</i></li> <li>Параметр <strong>Вид улучшения</strong> изменился на <i>Функционал</i></li> <li><strong>Продукт(ы)</strong> <i>Альт Домен</i> добавлен</li> <li><strong>Продукт(ы)</strong> удалён (<del><i>Альт Сервер</i></del>)</li> </ul></div></div>\n<div id=\"change-202\" class=\"journal has-details\"><div class=\"journal-content\"><ul class=\"journal-details\"> <li>Параметр <strong>Категория</strong> изменился на <i>Инфраструктура</i></li> <li><strong>Продукт(ы)</strong> <i>Альт Домен</i>, <i>Альт Сервер</i> добавлен</li> </ul></div></div>\n",
+        "multiple": [
+          226
+        ],
+        "journals": [
+          {
+            "id": 201,
+            "details": [
+              {
+                "property": "attr",
+                "name": "tracker_id",
+                "old_value": "2",
+                "new_value": "212"
+              },
+              {
+                "property": "cf",
+                "name": "226",
+                "old_value": null,
+                "new_value": "756"
+              },
+              {
+                "property": "cf",
+                "name": "721",
+                "old_value": null,
+                "new_value": "316"
+              },
+              {
+                "property": "cf",
+                "name": "226",
+                "old_value": "471",
+                "new_value": null
+              }
+            ]
+          },
+          {
+            "id": 202,
+            "details": [
+              {
+                "property": "cf",
+                "name": "226",
+                "old_value": null,
+                "new_value": "756"
+              },
+              {
+                "property": "cf",
+                "name": "226",
+                "old_value": null,
+                "new_value": "471"
+              },
+              {
+                "property": "attr",
+                "name": "category_id",
+                "old_value": null,
+                "new_value": "19504"
+              }
+            ]
+          }
+        ],
+        "expected": {
+          "201": [
+            {
+              "old": "Улучшение",
+              "new": "Feature"
+            },
+            {
+              "old": null,
+              "new": "Альт Домен"
+            },
+            {
+              "old": null,
+              "new": "Функционал"
+            },
+            {
+              "old": "Альт Сервер",
+              "new": null
+            }
+          ],
+          "202": [
+            {
+              "old": null,
+              "new": null
+            },
+            {
+              "old": null,
+              "new": null
+            },
+            {
+              "old": null,
+              "new": "Инфраструктура"
             }
           ]
         }
