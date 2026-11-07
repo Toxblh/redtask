@@ -131,8 +131,9 @@ struct CommentSheet: View {
         if lockedPrivate { return String(localized: "Private comment. You can’t change this flag: it stays private.") }
         if blocked { return String(localized: "You can’t write private notes: the server would publish this comment openly. Remove what must stay private and clear “Private note” to send.") }
         if editing == nil && model.quoteRefused { return String(localized: "The private comment wasn’t quoted: you can’t write private notes, so a reply containing it would be visible to everyone. You can still reply without the quote.") }
-        if editing != nil && mayPrivate == nil && (model.editPrivate || editing?.privateNotes == true) { return String(localized: "Couldn’t check whether you may change the “private” flag. If not, the server keeps it as it was.") }
-        if editing == nil && mayPrivate == nil && model.draftPrivate { return String(localized: "Couldn’t check whether you may write private notes. If not, the server will publish this comment openly.") }
+        // «не удалось узнать» — только когда запрос прав закончился без ответа, а не пока он идёт
+        if editing != nil && model.perms.known && mayPrivate == nil && (model.editPrivate || editing?.privateNotes == true) { return String(localized: "Couldn’t check whether you may change the “private” flag. If not, the server keeps it as it was.") }
+        if editing == nil && model.perms.known && mayPrivate == nil && model.draftPrivate { return String(localized: "Couldn’t check whether you may write private notes. If not, the server will publish this comment openly.") }
         return nil
     }
 }

@@ -70,21 +70,26 @@ final class MentionSearch {
     private var hits: [MentionPerson] = []
     private var resolved: [Named] = []
 
+    /// Без логина человека не предлагаем: вставлять нечего (user#id — не упоминание).
     func candidates(_ q: String) -> [MentionPerson] {
-        mentionCandidates(participants: participants, people: hits + MentionStore.shared.people, query: q, limit: 8)
+        mentionCandidates(participants: participants.filter { !$0.login.isEmpty }, people: hits + MentionStore.shared.people, query: q, limit: 8)
     }
 
-    /// Логины людей задачи: из кэша сотрудников, иначе профиль (users/:id или People).
+    /// Логины людей задачи: из кэша сотрудников, иначе people/:id.json, затем users/:id.json — все сразу.
     func resolve(_ named: [Named], app: AppModel) async {
         guard named != resolved else { return }
         resolved = named
         func login(_ id: Int) -> String { MentionStore.shared.known.first { $0.value.0 == id }?.key ?? "" }
         participants = named.map { MentionPerson(id: $0.id, name: $0.name, login: login($0.id)) }
-        for (n, p) in participants.enumerated() where p.login.isEmpty {
-            guard let person = try? await app.refs?.person(p.id), let l = person.login, !l.isEmpty,
-                  n < participants.count, participants[n].id == p.id else { continue }
-            MentionStore.shared.remember(l, id: p.id, name: p.name)
-            participants[n].login = l
+        guard let api = app.api else { return }
+        let missing = participants.filter { $0.login.isEmpty }.map(\.id)
+        await withTaskGroup(of: (Int, String?).self) { g in
+            for id in missing { g.addTask { (id, await api.login(id)) } }
+            for await (id, l) in g {
+                guard let l, let n = participants.firstIndex(where: { $0.id == id }) else { continue }
+                MentionStore.shared.remember(l, id: id, name: participants[n].name)
+                participants[n].login = l
+            }
         }
     }
 
@@ -118,8 +123,8 @@ struct MentionRow: View {
     }
 }
 
-/// Текст упоминания: @login, без логина — user#id.
-func mentionText(_ p: MentionPerson) -> String { p.login.isEmpty ? "user#\(p.id) " : "@\(p.login) " }
+/// Текст упоминания: «@login ».
+func mentionText(_ p: MentionPerson) -> String { "@\(p.login) " }
 
 /// Аватары упоминаний для вставки в текст: маленькие круглые картинки, нарисованные заранее.
 @MainActor @Observable

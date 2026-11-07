@@ -874,6 +874,13 @@ final class RedmineAPI: Sendable {
         return peoplePhones(String(decoding: data, as: UTF8.self))
     }
 
+    /// Логин для @упоминания (spec 8.1): people/:id.json, иначе users/:id.json. nil — не узнали.
+    func login(_ userId: Int) async -> String? {
+        if let l = (try? await (get("people/\(userId).json") as PeopleResponse).person.login), !l.isEmpty { return l }
+        if let l = (try? await (get("users/\(userId).json") as UserResponse).user.login), !l.isEmpty { return l }
+        return nil
+    }
+
     /// Поиск по сотрудникам (People): по НАЧАЛУ фамилии/имени/логина, без учёта регистра.
     func searchPeople(_ q: String, limit: Int = 8) async throws -> [Person] {
         try await (get("people.json", [("search", q), ("limit", String(limit))]) as PeopleListResponse).people
