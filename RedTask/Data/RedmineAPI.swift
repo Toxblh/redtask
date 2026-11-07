@@ -62,12 +62,15 @@ struct JournalLabel: Sendable, Hashable {
 }
 
 /// Подписи изменений из HTML страницы задачи (набор journal_labels): <div id="change-{id}"> → <li> из
-/// <ul class="journal-details"> в паре с details по порядку, подписи — тексты <i>. Число строк не сошлось — все nil.
-func journalDetailLabels(_ html: String, journals: [Journal]) -> [Int: [JournalLabel]] {
+/// <ul class="journal-details">, подписи — тексты <i>. Порядок как у Redmine (details_to_strings): сначала details,
+/// кроме полей из multiple, по одному <li>; затем по каждому полю multiple — «добавлены» и «удалены» одной строкой.
+/// Число строк не сошлось — все nil.
+func journalDetailLabels(_ html: String, journals: [Journal], multiple: Set<Int>) -> [Int: [JournalLabel]] {
     func text(_ s: Substring) -> String {
         let bare = String(s).replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
         return unraw(decodeEntities(bare)).split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
+    func italics(_ li: Substring) -> [String] { li.matches(of: /(?s)<i(?:\s[^>]*)?>(.*?)<\/i>/).map { text($0.1) } }
     var items: [Int: [Substring]] = [:]
     for part in html.components(separatedBy: #"<div id="change-"#).dropFirst() {
         guard let id = Int(part.prefix { $0.isNumber }),
@@ -75,15 +78,35 @@ func journalDetailLabels(_ html: String, journals: [Journal]) -> [Int: [JournalL
         items[id] = ul.matches(of: /(?s)<li[^>]*>(.*?)<\/li>/).map(\.1)
     }
     return Dictionary(journals.map { j in
+        let ds = j.details
+        func has(_ v: String?) -> Bool { !(v ?? "").isEmpty }
+        func isMulti(_ d: JournalDetail) -> Bool { d.property == "cf" && Int(d.name).map(multiple.contains) == true }
+        let plain = ds.indices.filter { !isMulti(ds[$0]) }
+        var fields: [String] = []
+        for d in ds where isMulti(d) && !fields.contains(d.name) { fields.append(d.name) }
+        // строки полей multiple: индексы details и какое значение подписывает строка
+        var groups: [(idx: [Int], old: Bool)] = []
+        for f in fields {
+            let mine = ds.indices.filter { isMulti(ds[$0]) && ds[$0].name == f }
+            let added = mine.filter { has(ds[$0].newValue) }, removed = mine.filter { has(ds[$0].oldValue) }
+            if !added.isEmpty { groups.append((added, false)) }
+            if !removed.isEmpty { groups.append((removed, true)) }
+        }
+        var out = ds.map { _ in JournalLabel() }
         let lis = items[j.id] ?? []
-        guard lis.count == j.details.count else { return (j.id, j.details.map { _ in JournalLabel() }) }
-        return (j.id, zip(j.details, lis).map { d, li in
-            let i = li.matches(of: /(?s)<i(?:\s[^>]*)?>(.*?)<\/i>/).map { text($0.1) }
-            let hasOld = !(d.oldValue ?? "").isEmpty, hasNew = !(d.newValue ?? "").isEmpty
-            if hasOld && hasNew && i.count == 2 { return JournalLabel(old: i[0], new: i[1]) }
-            if hasOld != hasNew && i.count == 1 { return hasOld ? JournalLabel(old: i[0]) : JournalLabel(new: i[0]) }
-            return JournalLabel()
-        })
+        guard lis.count == plain.count + groups.count else { return (j.id, out) }
+        for (n, k) in plain.enumerated() {
+            let d = ds[k], i = italics(lis[n])
+            let hasOld = has(d.oldValue), hasNew = has(d.newValue)
+            if hasOld && hasNew && i.count == 2 { out[k] = JournalLabel(old: i[0], new: i[1]) }
+            else if hasOld != hasNew && i.count == 1 { out[k] = hasOld ? JournalLabel(old: i[0]) : JournalLabel(new: i[0]) }
+        }
+        for (n, g) in groups.enumerated() {
+            let i = italics(lis[plain.count + n])
+            guard i.count == 1, g.idx.count == 1 else { continue }
+            if g.old { out[g.idx[0]].old = i[0] } else { out[g.idx[0]].new = i[0] }
+        }
+        return (j.id, out)
     }, uniquingKeysWith: { a, _ in a })
 }
 

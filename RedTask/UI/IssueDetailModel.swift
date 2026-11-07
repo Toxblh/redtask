@@ -167,8 +167,9 @@ final class IssueDetailModel {
 
     /// Подписи истории из страницы задачи (spec 14) — на экран и в словарь.
     private func applyPage(_ app: AppModel) {
-        guard let page, let journals = issue?.journals else { return }
-        let labels = journalDetailLabels(page, journals: journals)
+        guard let page, let issue else { return }
+        let journals = issue.journals
+        let labels = journalDetailLabels(page, journals: journals, multiple: Set(issue.customFields.filter(\.multiple).map(\.id)))
         names.page = labels
         Task { await LabelStore.shared.add(app.account, journals: journals, labels: labels) }
     }
