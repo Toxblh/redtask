@@ -1665,5 +1665,176 @@
         "phones": []
       }
     ]
+  },
+  "journal_labels": {
+    "_": "Подписи изменений журнала из HTML страницы задачи (п. 14). Для каждого журнала из journals: <div id=\"change-{id}\"> → <li> из <ul class=\"journal-details\"> по порядку, в паре с details по индексу. Подписи — тексты <i> в <li>: теги сняты, HTML-сущности раскрыты, пробелы и переносы схлопнуты в один, края обрезаны. old и new оба непустые и <i> ровно два → old=первый, new=второй; непустое только одно и <i> ровно один → подпись ему, другое null; иначе оба null. Пустая строка значения считается отсутствующим значением. Число <li> не равно числу details (или блока нет) → у всех details журнала null. Результат: объект id журнала (строкой) → список {old, new} по details; журналы без details — пустой список.",
+    "cases": [
+      {
+        "name": "трекер, проект, поле с пустым старым, список добавлен; вложение, описание, список удалён; не совпало число строк; журнал без блока",
+        "html": "<div id=\"change-101\" class=\"journal has-details\"><div id=\"note-1\" class=\"note\"><h4 class=\"journal-header\"><a href=\"#note-1\" class=\"journal-link\">#1</a></h4><div class=\"journal-content\"><ul class=\"journal-details\"> <li>Параметр <strong>Трекер</strong> изменился с <i>Улучшение</i> на <i>Feature</i></li> <li>Параметр <strong>Проект</strong> изменился с <i>Старый &amp; проект</i> на <i>Продукты</i></li> <li>Параметр <strong>Критичность</strong> изменился на <i>normal</i></li> <li><strong>Продукт(ы)</strong> <i>Альт\n  Домен</i> добавлен</li> </ul></div></div></div>\n<div id=\"change-102\" class=\"journal has-details\"><div id=\"note-1\" class=\"note\"><h4 class=\"journal-header\"><a href=\"#note-1\" class=\"journal-link\">#1</a></h4><div class=\"journal-content\"><ul class=\"journal-details\"> <li><strong>Файл</strong> <a href=\"/attachments/download/9/a.png\">a.png</a> добавлен</li> <li>Параметр <strong>Описание</strong> изменился (<a href=\"/journals/102/diff?detail_id=5\">Подробнее</a>)</li> <li><strong>Продукт(ы)</strong> удалён (<del><i>Альт Сервер</i></del>)</li> </ul></div></div></div>\n<div id=\"change-103\" class=\"journal has-details\"><div id=\"note-1\" class=\"note\"><h4 class=\"journal-header\"><a href=\"#note-1\" class=\"journal-link\">#1</a></h4><div class=\"journal-content\"><ul class=\"journal-details\"> <li>Параметр <strong>Категория</strong> изменился на <i>Инфраструктура</i></li> </ul></div></div></div>\n<div id=\"change-104\" class=\"journal has-notes\"><div class=\"wiki journal-note\"><p>текст</p></div></div>\n",
+        "journals": [
+          {
+            "id": 101,
+            "details": [
+              {
+                "property": "attr",
+                "name": "tracker_id",
+                "old_value": "2",
+                "new_value": "212"
+              },
+              {
+                "property": "attr",
+                "name": "project_id",
+                "old_value": "5539",
+                "new_value": "1976"
+              },
+              {
+                "property": "cf",
+                "name": "722",
+                "old_value": "",
+                "new_value": "normal"
+              },
+              {
+                "property": "cf",
+                "name": "226",
+                "old_value": null,
+                "new_value": "756"
+              }
+            ]
+          },
+          {
+            "id": 102,
+            "details": [
+              {
+                "property": "attachment",
+                "name": "9",
+                "old_value": null,
+                "new_value": "a.png"
+              },
+              {
+                "property": "attr",
+                "name": "description",
+                "old_value": "a",
+                "new_value": "b"
+              },
+              {
+                "property": "cf",
+                "name": "226",
+                "old_value": "471",
+                "new_value": null
+              }
+            ]
+          },
+          {
+            "id": 103,
+            "details": [
+              {
+                "property": "attr",
+                "name": "category_id",
+                "old_value": null,
+                "new_value": "19504"
+              },
+              {
+                "property": "attr",
+                "name": "status_id",
+                "old_value": "1",
+                "new_value": "2"
+              }
+            ]
+          },
+          {
+            "id": 104,
+            "details": []
+          },
+          {
+            "id": 105,
+            "details": [
+              {
+                "property": "attr",
+                "name": "category_id",
+                "old_value": null,
+                "new_value": "7"
+              }
+            ]
+          }
+        ],
+        "expected": {
+          "101": [
+            {
+              "old": "Улучшение",
+              "new": "Feature"
+            },
+            {
+              "old": "Старый & проект",
+              "new": "Продукты"
+            },
+            {
+              "old": null,
+              "new": "normal"
+            },
+            {
+              "old": null,
+              "new": "Альт Домен"
+            }
+          ],
+          "102": [
+            {
+              "old": null,
+              "new": null
+            },
+            {
+              "old": null,
+              "new": null
+            },
+            {
+              "old": "Альт Сервер",
+              "new": null
+            }
+          ],
+          "103": [
+            {
+              "old": null,
+              "new": null
+            },
+            {
+              "old": null,
+              "new": null
+            }
+          ],
+          "104": [],
+          "105": [
+            {
+              "old": null,
+              "new": null
+            }
+          ]
+        }
+      },
+      {
+        "name": "пустой HTML",
+        "html": "",
+        "journals": [
+          {
+            "id": 1,
+            "details": [
+              {
+                "property": "cf",
+                "name": "5",
+                "old_value": "1",
+                "new_value": "2"
+              }
+            ]
+          }
+        ],
+        "expected": {
+          "1": [
+            {
+              "old": null,
+              "new": null
+            }
+          ]
+        }
+      }
+    ]
   }
 }
