@@ -488,6 +488,16 @@
         }
       }
     },
+    "Attachment thumbnails" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Миниатюры вложений"
+          }
+        }
+      }
+    },
     "Attachments" : {
       "localizations" : {
         "ru" : {
@@ -504,6 +514,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Автор"
+          }
+        }
+      }
+    },
+    "Avatars" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Аватары"
           }
         }
       }
@@ -574,6 +594,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "По номеру"
+          }
+        }
+      }
+    },
+    "Cache" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Кэш"
           }
         }
       }
@@ -664,6 +694,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Очистить"
+          }
+        }
+      }
+    },
+    "Clear All" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Очистить всё"
           }
         }
       }
@@ -1110,6 +1150,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Готово"
+          }
+        }
+      }
+    },
+    "Downloaded attachments" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скачанные вложения"
           }
         }
       }
@@ -1631,6 +1681,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Задачи"
+          }
+        }
+      }
+    },
+    "Issues and lists" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Задачи и списки"
           }
         }
       }
@@ -2631,6 +2691,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RedTask"
+          }
+        }
+      }
+    },
+    "Reference data" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Справочники"
           }
         }
       }

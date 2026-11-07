@@ -331,6 +331,9 @@ actor RefData {
         }
     }
 
+    /// Только память (spec 15): файлы стирает очистка кэша.
+    func clear() { mem = [:]; misses = [:] }
+
     func projects(force: Bool = false) async throws -> [Project] { try await cached("projects", ttl: Self.projectsTTL, force: force) { try await $0.projects() } }
     func statuses(force: Bool = false) async throws -> [IssueStatus] { try await cached("statuses", force: force) { try await $0.statuses() } }
     func priorities(force: Bool = false) async throws -> [Priority] { try await cached("priorities", force: force) { try await $0.priorities() } }

@@ -273,6 +273,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("iOS decides when to run background checks — usually not more often than every 15 minutes, and less often if you rarely open the app. RedTask also checks every time you return to it.")
                 }
+                CacheSection()
                 Section("About") {
                     LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                     LabeledContent("License", value: "GNU GPL v3+")
@@ -290,6 +291,108 @@ struct SettingsView: View {
             .confirmationDialog("Sign out?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button("Sign Out", role: .destructive) { dismiss(); app.logout() }
             }
+        }
+    }
+}
+
+/// Что лежит в кэше учётки (spec 15). Вход, настройки, избранное, пины, история уведомлений, недавние
+/// и черновики — не здесь, очистка их не трогает.
+enum CacheKind: CaseIterable, Sendable {
+    case avatars, thumbnails, attachments, issues, refs
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .avatars: "Avatars"
+        case .thumbnails: "Attachment thumbnails"
+        case .attachments: "Downloaded attachments"
+        case .issues: "Issues and lists"
+        case .refs: "Reference data"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .avatars: "person.crop.circle"
+        case .thumbnails: "photo"
+        case .attachments: "paperclip"
+        case .issues: "checklist"
+        case .refs: "books.vertical"
+        }
+    }
+
+    /// Файлы и каталоги категории (справочники — вместе со словарём подписей, spec 14).
+    func items(_ account: String) -> [URL] {
+        let base = Files.caches.appending(path: account)
+        func images(_ prefix: String) -> [URL] {
+            ((try? FileManager.default.contentsOfDirectory(at: base.appending(path: "images"), includingPropertiesForKeys: nil)) ?? [])
+                .filter { $0.lastPathComponent.hasPrefix(prefix) }
+        }
+        switch self {
+        case .avatars: return images("avatar-")
+        case .thumbnails: return images("thumb-")
+        case .attachments: return [base.appending(path: "attachments")]
+        case .issues: return [base.appending(path: "issues"), base.appending(path: "lists")]
+        case .refs: return [base.appending(path: "refdata")]
+        }
+    }
+
+    @concurrent static func sizes(_ account: String) async -> [CacheKind: Int] {
+        var out: [CacheKind: Int] = [:]
+        for k in allCases {
+            var n = 0
+            for u in k.items(account) {
+                let files = FileManager.default.enumerator(at: u, includingPropertiesForKeys: [.totalFileAllocatedSizeKey])?.compactMap { $0 as? URL } ?? []
+                for f in files + [u] { n += (try? f.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize) ?? 0 }
+            }
+            out[k] = n
+        }
+        return out
+    }
+
+    @concurrent static func remove(_ kinds: [CacheKind], account: String) async {
+        for u in kinds.flatMap({ $0.items(account) }) { try? FileManager.default.removeItem(at: u) }
+    }
+}
+
+/// Раздел «Кэш» (spec 15): размер по категориям, очистка строки и всего. Подтверждения нет — кэш восстановится сам.
+private struct CacheSection: View {
+    @Environment(AppModel.self) private var app
+    /// nil — считается.
+    @State private var sizes: [CacheKind: Int]?
+
+    var body: some View {
+        Section {
+            ForEach(CacheKind.allCases, id: \.self) { k in
+                LabeledContent {
+                    HStack {
+                        Text(sizes.map { Fmt.size($0[k] ?? 0) } ?? "…").monospacedDigit()
+                        Button("Clear") { clear([k]) }.buttonStyle(.borderless)
+                    }
+                } label: { Label(k.title, systemImage: k.symbol) }
+            }
+            Button("Clear All") { clear(CacheKind.allCases) }
+        } header: {
+            HStack {
+                Text("Cache")
+                Spacer()
+                Text(sizes.map { Fmt.size($0.values.reduce(0, +)) } ?? "…")
+            }
+        }
+        .task { sizes = await CacheKind.sizes(app.account) }
+    }
+
+    private func clear(_ kinds: [CacheKind]) {
+        sizes = nil
+        Task {
+            await CacheKind.remove(kinds, account: app.account)
+            // и память: стёртое загрузится заново при следующем показе
+            await ImageStore.shared.clear()
+            if kinds.contains(.refs) {
+                await app.refs?.clear()
+                await LabelStore.shared.clear()
+            }
+            if kinds.contains(.attachments) { app.downloadsEpoch += 1 }
+            sizes = await CacheKind.sizes(app.account)
         }
     }
 }
