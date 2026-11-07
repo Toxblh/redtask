@@ -82,6 +82,7 @@ struct IssueDetailView: View {
                 case "comment":
                     try? await Task.sleep(for: .milliseconds(600))
                     if let d = UserDefaults.standard.string(forKey: "RTDraft") { model.draft = d }
+                    if UserDefaults.standard.bool(forKey: "RTPrivate") { model.draftPrivate = true }
                     sheet = .comment
                 case "edit": sheet = .edit
                 case "time": sheet = .time(nil)
@@ -850,16 +851,12 @@ struct CommentRow: View {
                     HStack(spacing: 4) {
                         Text(Fmt.dateTime(journal.createdOn))
                         Text(verbatim: "· #\(number)")
+                        if journal.privateNotes { PrivatePill() }
                         if let u = journal.updatedOn, u != journal.createdOn { Text("edited") }
                     }
                     .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                if journal.privateNotes {
-                    Label("Private note", systemImage: "lock.fill")
-                        .labelStyle(.iconOnly)
-                        .foregroundStyle(.orange)
-                }
             }
             RichText(text: journal.notes ?? "", context: ctx)
             ForEach(commentAttachments(journal, in: ctx.attachments)) { a in
@@ -867,7 +864,20 @@ struct CommentRow: View {
             }
         }
         .padding(.vertical, 4)
-        .listRowBackground(highlighted ? Color.accentColor.opacity(0.12) : journal.privateNotes ? Color.orange.opacity(0.06) : nil)
+        .listRowBackground(highlighted || journal.privateNotes ? background : nil)
+    }
+
+    /// Приватная (spec 13): янтарный фон ~9 % поверх фона карточки и полоса 3 pt слева.
+    @ViewBuilder private var background: some View {
+        if highlighted {
+            Color.accentColor.opacity(0.12)
+        } else if journal.privateNotes {
+            ZStack(alignment: .leading) {
+                Color(.secondarySystemGroupedBackground)
+                Color.privateFill.opacity(0.09)
+                Color.privateInk.frame(width: 3)
+            }
+        }
     }
 }
 

@@ -26,6 +26,8 @@ struct CommentSheet: View {
                 TextileEditor(text: text, attachments: model.issue?.attachments ?? [],
                               pendingNames: model.draftFiles.map(\.name), participants: model.issue.map(issueParticipants) ?? [], previewMode: $preview, fills: true)
                     .padding(.top, 8)
+                    // приватная (spec 13) — поле с янтарным фоном
+                    .background(model.commentPrivate ? Color.privateFill.opacity(0.09) : .clear)
                 if editing == nil && !model.draftFiles.isEmpty { files }
                 if let note = privacyNote {
                     Text(note)
@@ -117,8 +119,9 @@ struct CommentSheet: View {
     @ViewBuilder
     private var privacy: some View {
         if !lockedPrivate && (model.perms.has("set_notes_private") || model.commentPrivate) {
-            Toggle(isOn: $model.commentPrivate) { Label("Private note", systemImage: model.commentPrivate ? "lock.fill" : "lock.open") }
+            Toggle(isOn: $model.commentPrivate) { Label("Private note", systemImage: "lock.fill") }
                 .toggleStyle(.button)
+                .tint(model.commentPrivate ? Color.privateInk : nil)
         } else if lockedPrivate {
             Label("Private note", systemImage: "lock.fill").foregroundStyle(.secondary)
         }

@@ -551,3 +551,30 @@ private final class FilePreview: QLPreviewController, QLPreviewControllerDataSou
     func numberOfPreviewItems(in controller: QLPreviewController) -> Int { 1 }
     func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem { url as NSURL }
 }
+
+// MARK: - Приватные заметки (spec 13)
+
+extension Color {
+    /// Янтарный приватных заметок — один на все платформы: текст и полоса (#B26A00, в тёмной #FFCA28).
+    static let privateInk = Color(UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 1, green: 0xCA / 255, blue: 0x28 / 255, alpha: 1)
+        : UIColor(red: 0xB2 / 255, green: 0x6A / 255, blue: 0, alpha: 1) })
+    /// Фон — #FFB300 с прозрачностью.
+    static let privateFill = Color(red: 1, green: 0xB3 / 255, blue: 0)
+}
+
+/// «🔒 Приватная» после номера комментария.
+struct PrivatePill: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "lock.fill")
+            Text("Private")
+        }
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(Color.privateInk)
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .background(Color.privateFill.opacity(0.22), in: Capsule())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Private note"))
+    }
+}

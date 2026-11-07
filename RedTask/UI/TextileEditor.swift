@@ -47,6 +47,7 @@ struct TextileEditor: View {
                 .frame(maxWidth: .infinity, minHeight: fills ? nil : 160, maxHeight: fills ? .infinity : nil, alignment: .topLeading)
             } else {
                 TextEditor(text: $text, selection: $selection)
+                    .scrollContentBackground(.hidden) // фон — снаружи (приватная заметка, spec 13)
                     .focused($focused)
                     // ширину — явно: в строке формы редактор иначе сжимается до ширины пары букв
                     .frame(maxWidth: .infinity, minHeight: fills ? nil : 160, maxHeight: fills ? .infinity : nil)
