@@ -439,7 +439,7 @@ private struct AssigneeAvatars: View {
     var body: some View {
         let fits = options.count <= max
         let visible = fits ? options : Array(options.prefix(max - 1))
-        HStack(spacing: -size * 0.3) {
+        HStack(spacing: -6) { // шаг 26 при аватаре 32 — как на Android и GNOME (spec 3.2)
             ForEach(visible, id: \.key) { o in
                 Button { toggle(o.key) } label: { avatar(o) }
                     .buttonStyle(.plain)
