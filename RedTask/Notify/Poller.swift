@@ -192,6 +192,9 @@ struct PollCollector {
     /// Правка → текст по new_value самого журнала (за окно могло быть несколько смен).
     private func detailText(_ issue: Issue, _ d: JournalDetail) async -> String {
         let v = d.newValue.flatMap { $0.isEmpty ? nil : $0 }
+        // подпись из словаря (spec 14) — без запросов; справочники и сырое значение — после
+        var known: String?
+        if let k = v.flatMap({ labelKey(d, $0) }) { known = await LabelStore.shared.label(s.accountKey, k) }
         func line(_ label: String, _ value: String?) -> String { "\(label.lowercased()) → \(value.map { String($0.prefix(80)) } ?? "—")" }
         switch d.property {
         case "attr":
@@ -207,10 +210,10 @@ struct PollCollector {
                 return line(String(localized: "Tracker"), named(v, names, issue.tracker))
             case "fixed_version_id":
                 let names = dict(await soft { try await refs.versions(issue.project.id) }) { ($0.id, $0.name) }
-                return line(String(localized: "Version"), named(v, names, issue.fixedVersion))
+                return line(String(localized: "Version"), known ?? named(v, names, issue.fixedVersion))
             case "assigned_to_id": return line(String(localized: "Assignee"), await userName(issue, v))
-            case "category_id": return line(String(localized: "Category"), named(v, nil, issue.category))
-            case "project_id": return line(String(localized: "Project"), named(v, nil, issue.project))
+            case "category_id": return line(String(localized: "Category"), known ?? named(v, nil, issue.category))
+            case "project_id": return line(String(localized: "Project"), known ?? named(v, nil, issue.project))
             case "parent_id": return line(String(localized: "Parent issue"), v.map { "#\($0)" })
             case "done_ratio": return line(String(localized: "Progress"), v.map { "\($0)%" })
             case "due_date": return line(String(localized: "Due date"), v)
@@ -219,11 +222,11 @@ struct PollCollector {
             case "subject": return line(String(localized: "Subject"), v)
             case "description": return String(localized: "description changed")
             case "is_private": return v == "1" || v == "true" ? String(localized: "the issue became private") : String(localized: "the issue became public")
-            default: return line(d.name, v)
+            default: return line(d.name, known ?? v)
             }
         case "cf":
             let name = issue.customFields.first { String($0.id) == d.name }?.name
-            return line(name.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "field"), v)
+            return line(name.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "field"), known ?? v)
         case "attachment":
             return v.map { String(localized: "file: \($0)") } ?? String(localized: "file deleted: \(d.oldValue ?? "")")
         case "relation":

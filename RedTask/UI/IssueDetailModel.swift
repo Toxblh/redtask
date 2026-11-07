@@ -20,6 +20,18 @@ struct FieldNames {
     var versions: [Int: String] = [:]
     var categories: [Int: String] = [:]
     var customFields: [Int: String] = [:]
+    /// Подписи из HTML этой задачи (spec 14): id журнала → {old, new} по details.
+    var page: [Int: [JournalLabel]] = [:]
+    /// Словарь подписей (spec 14).
+    var dict: [String: String] = [:]
+
+    /// Значение изменения: HTML этой задачи → словарь → справочники → сырое (spec 14).
+    func value(_ j: Journal, _ d: JournalDetail, old: Bool) -> String {
+        guard let v = old ? d.oldValue : d.newValue, !v.isEmpty else { return "—" }
+        if let i = j.details.firstIndex(of: d), let l = page[j.id], i < l.count, let s = old ? l[i].old : l[i].new { return s }
+        if let k = labelKey(d, v), let s = dict[k] { return s }
+        return resolve(d.property == "cf" ? "cf" : d.name, v)
+    }
 
     func resolve(_ field: String, _ v: String?) -> String {
         guard let v, !v.isEmpty else { return "—" }
@@ -90,6 +102,8 @@ final class IssueDetailModel {
     private(set) var cfLabels: [Int: String] = [:]
     /// Листы согласования (spec 10): из HTML страницы задачи, в REST их нет.
     private(set) var customTables: [CustomTable] = []
+    /// HTML страницы задачи — для подписей истории (spec 14) при каждой смене журналов.
+    private var page: String?
     /// Состояние подзадач и связанных задач — для подписей (тема, статус).
     private(set) var related: [Int: Issue] = [:]
     /// Комментарии, править которые сервер отказал.
@@ -118,13 +132,17 @@ final class IssueDetailModel {
             timeEntries = snap.timeEntries
             customTables = snap.customTables ?? []
         }
+        if names.dict.isEmpty { names.dict = await LabelStore.shared.all(app.account) }
         loading = true
         defer { loading = false }
         // страница задачи — параллельно с JSON и не задерживая показ; в демо страниц нет
         if !app.isDemo {
             Task {
-                guard let t = await api.issueCustomTables(issueId) else { return }
+                guard let html = await api.issuePage(issueId) else { return }
+                let t = RedTask.customTables(html)
                 customTables = t
+                page = html
+                applyPage(app)
                 if let issue { await IssueCache.save(app.account, IssueSnapshot(issue: issue, timeEntries: timeEntries, customTables: t)) }
             }
         }
@@ -135,6 +153,7 @@ final class IssueDetailModel {
             let times = await t
             issue = fresh
             timeEntries = times
+            applyPage(app)
             error = nil
             refreshError = nil
             await IssueCache.save(app.account, IssueSnapshot(issue: fresh, timeEntries: times, customTables: customTables))
@@ -144,6 +163,14 @@ final class IssueDetailModel {
             // задача уже на экране (кэш) — не модальный алерт, а строка в шапке: обновление фоновое, работать оно не мешает
             if issue == nil { self.error = error.localizedDescription } else { refreshError = error.localizedDescription }
         }
+    }
+
+    /// Подписи истории из страницы задачи (spec 14) — на экран и в словарь.
+    private func applyPage(_ app: AppModel) {
+        guard let page, let journals = issue?.journals else { return }
+        let labels = journalDetailLabels(page, journals: journals)
+        names.page = labels
+        Task { await LabelStore.shared.add(app.account, journals: journals, labels: labels) }
     }
 
     /// Права, справочники, подписи настраиваемых полей, состояние связанных задач — не мешают показу задачи.
@@ -176,6 +203,9 @@ final class IssueDetailModel {
         n.users = users
         if let c = i.category { n.categories[c.id] = c.name }
         for f in i.customFields { n.customFields[f.id] = f.name }
+        // подписи могли прийти, пока ждали справочники
+        n.page = names.page
+        n.dict = names.dict
         names = n
         if let a = await act { activities = a }
         cfLabels = await labels

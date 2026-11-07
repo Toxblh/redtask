@@ -223,4 +223,15 @@ struct SpecVectorsTests {
             #expect(out == want, "\(c["name"]!)")
         }
     }
+
+    @Test func journalLabelsCases() {
+        for c in cases("journal_labels") {
+            let journals: [Journal] = (c["journals"] as! [[String: Any]]).map { decode(json($0)) }
+            let out = journalDetailLabels(c["html"] as! String, journals: journals)
+            for (id, want) in c["expected"] as! [String: [[String: Any]]] {
+                let got = (out[Int(id)!] ?? []).map { "\($0.old ?? "nil")|\($0.new ?? "nil")" }
+                #expect(got == want.map { "\($0["old"] as? String ?? "nil")|\($0["new"] as? String ?? "nil")" }, "\(c["name"]!) #\(id)")
+            }
+        }
+    }
 }

@@ -221,6 +221,62 @@ enum IssueCache {
     }
 }
 
+/**
+ Словарь подписей значений истории (spec 14): `{property}:{name}:{value}` → подпись. Без срока жизни:
+ каждая страница задачи перезаписывает свежими; не больше 5000, лишние — самые давно обновлённые.
+ Лежит в refdata учётки: стирается при выходе и очисткой «Справочников».
+ */
+actor LabelStore {
+    static let shared = LabelStore()
+    static let limit = 5000
+    private struct Entry: Codable { var key: String; var label: String; var at: Date }
+    private var account = ""
+    private var map: [String: Entry] = [:]
+
+    private func file(_ account: String) -> URL { Files.dir(Files.caches, account, "refdata").appendingPathComponent("labels.json") }
+
+    private func load(_ account: String) {
+        guard self.account != account else { return }
+        let list = Files.read([Entry].self, file(account)) ?? []
+        map = Dictionary(list.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        self.account = account
+    }
+
+    func all(_ account: String) -> [String: String] {
+        load(account)
+        return map.mapValues(\.label)
+    }
+
+    func label(_ account: String, _ key: String) -> String? {
+        load(account)
+        return map[key]?.label
+    }
+
+    /// Подписи со страницы задачи — в словарь.
+    func add(_ account: String, journals: [Journal], labels: [Int: [JournalLabel]]) {
+        load(account)
+        let now = Date()
+        var changed = false
+        for j in journals {
+            for (d, l) in zip(j.details, labels[j.id] ?? []) {
+                for (v, s) in [(d.oldValue, l.old), (d.newValue, l.new)] {
+                    guard let v, let s, !s.isEmpty, let k = labelKey(d, v) else { continue }
+                    map[k] = Entry(key: k, label: s, at: now)
+                    changed = true
+                }
+            }
+        }
+        guard changed else { return }
+        if map.count > Self.limit {
+            for e in map.values.sorted(by: { $0.at < $1.at }).prefix(map.count - Self.limit) { map[e.key] = nil }
+        }
+        try? Files.write(Array(map.values), file(account))
+    }
+
+    /// Только память: файл стирается вместе с каталогом (выход, очистка кэша).
+    func clear() { account = ""; map = [:] }
+}
+
 // MARK: - Справочники
 
 /**

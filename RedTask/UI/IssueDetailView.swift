@@ -954,8 +954,8 @@ struct ActionRow: View {
             return detail.newValue.map { "\(t) #\($0)" } ?? String(localized: "\(t) #\(detail.oldValue ?? "") removed")
         default:
             if detail.name == "description" { return String(localized: "Description changed") }
-            let old = detail.oldValue.flatMap { $0.isEmpty ? nil : names.resolve(detail.name, $0) }
-            let new = names.resolve(detail.property == "cf" ? "cf" : detail.name, detail.newValue)
+            let old = (detail.oldValue ?? "").isEmpty ? nil : names.value(journal, detail, old: true)
+            let new = names.value(journal, detail, old: false)
             return old.map { "\(label): \($0) → \(new)" } ?? "\(label): \(new)"
         }
     }

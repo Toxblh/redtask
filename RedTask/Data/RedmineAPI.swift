@@ -55,6 +55,43 @@ func customTables(_ html: String) -> [CustomTable] {
     }
 }
 
+/// Подписи старого и нового значения изменения в журнале (spec 14); nil — подписи нет.
+struct JournalLabel: Sendable, Hashable {
+    var old: String?
+    var new: String?
+}
+
+/// Подписи изменений из HTML страницы задачи (набор journal_labels): <div id="change-{id}"> → <li> из
+/// <ul class="journal-details"> в паре с details по порядку, подписи — тексты <i>. Число строк не сошлось — все nil.
+func journalDetailLabels(_ html: String, journals: [Journal]) -> [Int: [JournalLabel]] {
+    func text(_ s: Substring) -> String {
+        let bare = String(s).replacingOccurrences(of: "<[^>]*>", with: "", options: .regularExpression)
+        return unraw(decodeEntities(bare)).split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+    var items: [Int: [Substring]] = [:]
+    for part in html.components(separatedBy: #"<div id="change-"#).dropFirst() {
+        guard let id = Int(part.prefix { $0.isNumber }),
+              let ul = part.firstMatch(of: /(?s)<ul class="journal-details[^"]*">(.*?)<\/ul>/)?.1 else { continue }
+        items[id] = ul.matches(of: /(?s)<li[^>]*>(.*?)<\/li>/).map(\.1)
+    }
+    return Dictionary(journals.map { j in
+        let lis = items[j.id] ?? []
+        guard lis.count == j.details.count else { return (j.id, j.details.map { _ in JournalLabel() }) }
+        return (j.id, zip(j.details, lis).map { d, li in
+            let i = li.matches(of: /(?s)<i(?:\s[^>]*)?>(.*?)<\/i>/).map { text($0.1) }
+            let hasOld = !(d.oldValue ?? "").isEmpty, hasNew = !(d.newValue ?? "").isEmpty
+            if hasOld && hasNew && i.count == 2 { return JournalLabel(old: i[0], new: i[1]) }
+            if hasOld != hasNew && i.count == 1 { return hasOld ? JournalLabel(old: i[0]) : JournalLabel(new: i[0]) }
+            return JournalLabel()
+        })
+    }, uniquingKeysWith: { a, _ in a })
+}
+
+/// Ключ словаря подписей (spec 14): `{property}:{name}:{value}`; пишутся только attr *_id и cf.
+func labelKey(_ d: JournalDetail, _ value: String) -> String? {
+    d.property == "cf" || (d.property == "attr" && d.name.hasSuffix("_id")) ? "\(d.property):\(d.name):\(value)" : nil
+}
+
 /// Телефон из профиля People: как на сайте и для набора (tel:, добавочный — через запятую).
 struct PersonPhone: Codable, Sendable, Hashable {
     var text: String
@@ -862,10 +899,10 @@ final class RedmineAPI: Sendable {
         }
     }
 
-    /// Листы согласования (spec 10) со страницы задачи: в REST их нет. nil — страница не пришла.
-    func issueCustomTables(_ issueId: Int) async -> [CustomTable]? {
+    /// Страница задачи: листы согласования (spec 10) и подписи истории (spec 14), в REST их нет. nil — не пришла.
+    func issuePage(_ issueId: Int) async -> String? {
         guard let (data, http) = try? await htmlPage("issues/\(issueId)"), (200..<300).contains(http.statusCode) else { return nil }
-        return customTables(String(decoding: data, as: UTF8.self))
+        return String(decoding: data, as: UTF8.self)
     }
 
     /// Телефоны (spec 11): в people/:id.json их нет, только на странице /people/:id. nil — страница не пришла.

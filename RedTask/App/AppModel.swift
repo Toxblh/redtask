@@ -161,7 +161,7 @@ final class AppModel {
         api = nil
         refs = nil
         MentionStore.shared.clear()
-        Task { await ImageStore.shared.clear() }
+        Task { await ImageStore.shared.clear(); await LabelStore.shared.clear() }
         unreadCount = 0
         pendingFavorite = nil
         if isDemo {
