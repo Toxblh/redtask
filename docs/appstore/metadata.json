@@ -1,0 +1,33 @@
+{
+  "primaryCategory": "PRODUCTIVITY",
+  "secondaryCategory": "DEVELOPER_TOOLS",
+  "copyright": "2026 Anton Palgunov",
+  "privacyPolicyUrl": "https://toxblh.github.io/redtask/privacy",
+  "supportUrl": "https://toxblh.github.io/redtask/support",
+  "marketingUrl": "https://github.com/toxblh/redtask",
+  "locales": {
+    "en-US": {
+      "name": "RedTask",
+      "subtitle": "Client for Redmine",
+      "keywords": "redmine,issue,tracker,task,bug,project,ticket,agile,wiki,time,tracking,todo,team,work",
+      "promotionalText": "Your Redmine issues on iPhone and iPad: assigned to you, watched and favorites, with comments, time logging and notifications.",
+      "whatsNew": "Private notes are clearly marked. Better @mentions. Fixes and improvements.",
+      "description": "RedTask is a fast, native client for your Redmine server on iPhone and iPad.\n\nISSUES\n• My issues, watched issues and favorites in one place\n• Search and filters: open, closed, by project\n• Full issue details: status, priority, assignee, dates, progress, estimates, custom fields, relations and subtasks\n• Rich Textile formatting: tables, code and links to other issues\n\nWORK\n• Comment with formatting, @mentions and attachments from Photos or Files\n• Private notes, clearly marked\n• Change status, assignee, priority and other fields\n• Log time\n• Create issues and subtasks\n\nPROJECTS\n• Project overview, issues, versions, wiki and files\n• Pin the projects you use most\n\nNOTIFICATIONS\n• Activity bell with new comments, changes and due dates\n• Background checks deliver quiet notifications about your issues\n\nPRIVATE BY DESIGN\n• Connects only to the server you enter\n• Your API key is stored in the Keychain\n• No analytics, no ads, no tracking\n\nRequires a Redmine server with the REST API enabled and your API key (My account → API access key). No server? Tap Try Demo on the sign-in screen.\n\nRedTask is an independent app and is not affiliated with the Redmine project."
+    },
+    "ru": {
+      "name": "RedTask",
+      "subtitle": "Клиент для Redmine",
+      "keywords": "redmine,задачи,трекер,баг,проект,тикет,вики,трудозатраты,команда,работа,таск,issue,tracker",
+      "promotionalText": "Задачи Redmine на iPhone и iPad: свои, отслеживаемые и избранные — с комментариями, учётом времени и уведомлениями.",
+      "whatsNew": "Приватные заметки теперь хорошо видны. Улучшены @упоминания. Исправления и улучшения.",
+      "description": "RedTask — быстрый нативный клиент вашего сервера Redmine для iPhone и iPad.\n\nЗАДАЧИ\n• Мои, отслеживаемые и избранные задачи в одном месте\n• Поиск и фильтры: открытые, закрытые, по проекту\n• Вся информация о задаче: статус, приоритет, исполнитель, сроки, готовность, оценки, настраиваемые поля, связи и подзадачи\n• Форматирование Textile: таблицы, код, ссылки на другие задачи\n\nРАБОТА\n• Комментарии с форматированием, @упоминаниями и вложениями из Фото и Файлов\n• Приватные заметки с заметной пометкой\n• Смена статуса, исполнителя, приоритета и других полей\n• Учёт трудозатрат\n• Создание задач и подзадач\n\nПРОЕКТЫ\n• Обзор проекта, задачи, версии, вики и файлы\n• Закрепление часто используемых проектов\n\nУВЕДОМЛЕНИЯ\n• Колокольчик с новыми комментариями, изменениями и сроками\n• Фоновая проверка присылает тихие уведомления по вашим задачам\n\nКОНФИДЕНЦИАЛЬНОСТЬ\n• Подключается только к указанному вами серверу\n• API-ключ хранится в связке ключей\n• Никакой аналитики, рекламы и трекинга\n\nНужен сервер Redmine с включённым REST API и ваш API-ключ (Моя учётная запись → Ключ доступа к API). Нет сервера? Нажмите «Попробовать без сервера» на экране входа.\n\nRedTask — независимое приложение, не связанное с проектом Redmine."
+    }
+  },
+  "review": {
+    "demoAccountRequired": false,
+    "notes": "RedTask is a client for self-hosted Redmine servers, so it normally needs the user's own server. To review the app without a server, tap \"Try Demo\" at the bottom of the sign-in screen. The demo runs fully offline on built-in sample data; all actions (comments, status, assignee, time logging, favorites, new issues) work in memory and reset on relaunch. To leave the demo, open Settings (gear icon) → Sign Out.\n\nThe app collects no data and has no accounts of its own: it connects only to the Redmine server the user enters, with the user's own API key. Background fetch is used to check the user's server for new activity on their issues and show local notifications."
+  },
+  "ageRating": "4+ — all content questions None/No; no user-generated content hosted by the app, no web browser, no gambling, no ads",
+  "pricing": "Free, all territories",
+  "appPrivacy": "Data Not Collected (manual in browser)"
+}
