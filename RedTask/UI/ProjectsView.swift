@@ -3,7 +3,6 @@ import SwiftUI
 /// Проекты (кэш на неделю) → задачи проекта. Внутренний стек живёт в колонке списка.
 struct ProjectsView: View {
     @Environment(AppModel.self) private var app
-    @Binding var selection: Project?
     @State private var projects: [Project] = []
     @State private var error: String?
     @State private var loading = false
@@ -17,7 +16,7 @@ struct ProjectsView: View {
 
     var body: some View {
         Group {
-            List(selection: $selection) {
+            List {
                 // избранные — секцией сверху (только при пустом фильтре), общий список не меняется
                 let pinned = query.isEmpty ? pinnedProjects(projects, pins: app.projectPins) : []
                 if pinned.isEmpty {

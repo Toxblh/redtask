@@ -96,7 +96,7 @@ struct RootView: View {
         /// Проекты — три колонки: проекты → задачи проекта → задача (на iPhone — один стек).
         var projects = false
         @ViewBuilder let content: (Binding<Int?>) -> Content
-        @State private var project: Project?
+        @State private var projectPath: [Project] = []
         /// На iPhone переход из уведомления/ссылки показывает сразу задачу, минуя список.
         @State private var compactColumn = NavigationSplitViewColumn.sidebar
         @State private var selection: Int?
@@ -108,15 +108,18 @@ struct RootView: View {
         var body: some View {
             Group {
                 if projects {
+                    // две колонки, а не три: рядом с сайдбаром вкладок (iPad, Mac) три дали бы четыре.
+                    // В колонке списка — стек «проекты → задачи проекта», как в Почте и Заметках.
                     NavigationSplitView(preferredCompactColumn: $compactColumn) {
-                        ProjectsView(selection: $project)
-                            .toolbar { RootToolbar(sheet: $sheet) }
-                            .toolbar(removing: .sidebarToggle)
-                    } content: {
-                        if let p = project {
-                            ProjectView(project: p, selection: $selection, page: $page).id(p.id)
-                        } else {
-                            ContentUnavailableView("Select a project", systemImage: "folder")
+                        // переход по стеку, а не выделением в списке: выделение в свёрнутом split view (iPhone)
+                        // сразу уводит в колонку детали, минуя задачи проекта
+                        NavigationStack(path: $projectPath) {
+                            ProjectsView()
+                                .toolbar { RootToolbar(sheet: $sheet) }
+                                .toolbar(removing: .sidebarToggle)
+                                .navigationDestination(for: Project.self) { p in
+                                    ProjectView(project: p, selection: $selection, page: $page).id(p.id)
+                                }
                         }
                     } detail: { detail }
                 } else {
@@ -139,7 +142,7 @@ struct RootView: View {
                 path = NavigationPath()
                 compactColumn = .detail
             }
-            .onChange(of: project) { page = nil }
+            .onChange(of: projectPath) { page = nil }
             .onChange(of: app.openRequest) { _, r in handle(r) }
             .onAppear { handle(app.openRequest) }
             #if DEBUG
@@ -152,9 +155,9 @@ struct RootView: View {
                     compactColumn = .detail
                 }
                 guard projects, pid > 0, let api = app.api, let p = try? await api.projects().first(where: { $0.id == pid }) else { return }
-                project = p
+                projectPath = [p]
                 let vid = d.integer(forKey: "RTVersion")
-                try? await Task.sleep(for: .milliseconds(500))  // onChange(of: project) сбрасывает page
+                try? await Task.sleep(for: .milliseconds(500))  // onChange(of: projectPath) сбрасывает page
                 if vid > 0, let v = try? await api.versions(pid).first(where: { $0.id == vid }) { page = .version(v) }
             }
             #endif
