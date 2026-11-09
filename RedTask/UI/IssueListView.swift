@@ -24,6 +24,8 @@ enum ListKind: Hashable {
         case .project(let id, _): "project-\(id)"
         }
     }
+
+    var isProject: Bool { if case .project = self { true } else { false } }
 }
 
 /// Список задач: кэш мгновенно, сеть освежает (stale-while-revalidate), подгрузка страницами.
@@ -191,7 +193,8 @@ struct IssueListView: View {
             }
         }
         .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+        // вкладки — крупный, как у «Проектов» и «Поиска»; в проекте — мелкий: на нём меню разделов (toolbarTitleMenu)
+        .navigationBarTitleDisplayMode(kind.isProject ? .inline : .large)
         .searchable(text: $query, prompt: Text("Search in this list"))
     }
 

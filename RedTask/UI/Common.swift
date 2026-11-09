@@ -743,6 +743,12 @@ private struct HalfSheet: ViewModifier {
     // по устройству, а не по классу размера: внутри листа на iPad класс ширины — compact
     private let phone = UIDevice.current.userInterfaceIdiom == .phone
     func body(content: Content) -> some View {
-        content.presentationDetents(phone ? [.medium, .large] : [.large])
+        if phone {
+            // плотный фон: сквозь стекло половинного листа проступала задача и мешала читать поля
+            content.presentationDetents([.medium, .large])
+                .presentationBackground(Color(.systemGroupedBackground))
+        } else {
+            content.presentationDetents([.large])
+        }
     }
 }

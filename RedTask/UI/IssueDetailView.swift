@@ -88,6 +88,8 @@ struct IssueDetailView: View {
                 case "time": sheet = .time(nil)
                 case "relation": sheet = .relation
                 case "person": sheet = .person(UserDefaults.standard.integer(forKey: "RTPerson"))
+                case "select": // короткий комментарий в листе «Выделить текст»
+                    Task { await debugSelectSheet() }
                 case "row": // первая строка первого листа согласования (spec 10)
                     Task {
                         for _ in 0..<30 where model.customTables.first?.rows.isEmpty ?? true { try? await Task.sleep(for: .milliseconds(500)) }
@@ -689,6 +691,14 @@ struct IssueDetailView: View {
             Label("More", systemImage: "ellipsis")
         }
     }
+
+    #if DEBUG
+    private func debugSelectSheet() async {
+        for _ in 0..<30 where model.issue == nil { try? await Task.sleep(for: .milliseconds(300)) }
+        let notes: [String] = (model.issue?.journals ?? []).compactMap { $0.notes }.filter { !$0.isEmpty }
+        sheet = .select(notes.last ?? "", nil)
+    }
+    #endif
 
     // MARK: - Листы
 
