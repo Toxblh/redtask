@@ -578,3 +578,157 @@ struct PrivatePill: View {
             .accessibilityLabel(Text("Private note"))
     }
 }
+
+/// Прокрутка длинного статичного содержимого (вики), как в Заметках: каждый блок (абзац, таблица, код) рисуется
+/// один раз в своём UIHostingController, а двигает их системный UIScrollView.
+/// Почему не ScrollView SwiftUI с одним видом: (1) каждый кадр прокрутки обходил весь граф видов страницы;
+/// (2) на Mac каждое событие колеса/трекпада ищет элемент под курсором (hover) — перебором по всем ссылкам
+/// и ячейкам страницы. Отдельные виды на блок UIKit отсекает по рамкам: проверяется только блок под курсором.
+/// Окружение в UIHostingController само не наследуется — то, что нужно содержимому, передаётся явно.
+struct StaticScroll: UIViewControllerRepresentable {
+    @Environment(AppModel.self) private var app
+    /// Смена id — пересобрать блоки; иначе обновление экрана их не трогает.
+    let id: AnyHashable
+    let items: () -> [AnyView]
+    var maxWidth: CGFloat = 900
+    var refresh: (() async -> Void)? = nil
+
+    func makeUIViewController(context: Context) -> Controller { Controller() }
+
+    func updateUIViewController(_ c: Controller, context: Context) {
+        c.refresh = refresh
+        c.maxWidth = maxWidth
+        guard c.id != id else { return }
+        let env = context.environment, app = app
+        c.id = id
+        c.set(items().map { v in
+            AnyView(v
+                .environment(app)
+                .environment(\.openURL, env.openURL)
+                .environment(\.navigate, env.navigate)
+                .tint(Color("AccentColor")))
+        })
+    }
+
+    final class Controller: UIViewController, UIScrollViewDelegate {
+        private let scroll = UIScrollView()
+        private var hosts: [UIHostingController<AnyView>] = []
+        private var width: CGFloat = 0
+        var id: AnyHashable?
+        var maxWidth: CGFloat = 900
+        var refresh: (() async -> Void)?
+
+        override func viewDidLoad() {
+            super.viewDidLoad()
+            scroll.alwaysBounceVertical = true
+            scroll.delegate = self
+            scroll.frame = view.bounds
+            scroll.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            view.addSubview(scroll)
+            #if !targetEnvironment(macCatalyst)
+            let rc = UIRefreshControl()
+            rc.addAction(UIAction { [weak self, weak rc] _ in
+                Task { @MainActor in await self?.refresh?(); rc?.endRefreshing() }
+            }, for: .valueChanged)
+            scroll.refreshControl = rc
+            #endif
+            #if DEBUG
+            DebugAutoScroll.attach(to: scroll)
+            #endif
+        }
+
+        func set(_ views: [AnyView]) {
+            for h in hosts { h.willMove(toParent: nil); h.view.removeFromSuperview(); h.removeFromParent() }
+            hosts = views.map { v in
+                let h = UIHostingController(rootView: v)
+                h.view.backgroundColor = .clear
+                h.sizingOptions = .preferredContentSize
+                addChild(h)
+                scroll.addSubview(h.view)
+                h.didMove(toParent: self)
+                return h
+            }
+            layoutBlocks()
+        }
+
+        /// Колонка не шире maxWidth, по центру, с полями 16: высоту каждого блока SwiftUI считает под неё один раз.
+        private func layoutBlocks() {
+            guard width > 0 else { return }
+            let col = min(width, maxWidth) - 32, x = (width - min(width, maxWidth)) / 2 + 16
+            var y: CGFloat = 16
+            for h in hosts {
+                let size = h.sizeThatFits(in: CGSize(width: col, height: .greatestFiniteMagnitude))
+                h.view.frame = CGRect(x: x, y: y, width: col, height: ceil(size.height))
+                y += ceil(size.height)
+            }
+            scroll.contentSize = CGSize(width: width, height: y + 16)
+        }
+
+        override func viewDidLayoutSubviews() {
+            super.viewDidLayoutSubviews()
+            if scroll.bounds.width != width {
+                width = scroll.bounds.width
+                layoutBlocks()
+            }
+        }
+
+        // Пока страница едет, блоки не участвуют в поиске элемента под курсором (как в браузере): на Mac он идёт
+        // на каждом событии трекпада и перебирает все ссылки и ячейки блока. Остановилась — снова кликабельно.
+        private func moving(_ on: Bool) { for h in hosts { h.view.isUserInteractionEnabled = !on } }
+        func scrollViewWillBeginDragging(_ s: UIScrollView) { moving(true) }
+        func scrollViewDidEndDragging(_ s: UIScrollView, willDecelerate d: Bool) { if !d { moving(false) } }
+        func scrollViewDidEndDecelerating(_ s: UIScrollView) { moving(false) }
+        func scrollViewDidEndScrollingAnimation(_ s: UIScrollView) { moving(false) }
+
+        /// Высота блока изменилась (картинка загрузилась, раскрыли «Подробнее»).
+        override func preferredContentSizeDidChange(forChildContentContainer container: any UIContentContainer) {
+            super.preferredContentSizeDidChange(forChildContentContainer: container)
+            layoutBlocks()
+        }
+    }
+}
+
+#if DEBUG
+/// -RTScrollY <pt> — снимки середины длинной страницы. -RTAutoScroll YES — прокрутка туда-сюда по 120 pt за кадр
+/// дисплея; итог по интервалам кадров (медиана/p95/макс.) — в Documents/autoscroll.txt.
+@MainActor enum DebugAutoScroll {
+    static func attach(to scroll: UIScrollView) {
+        let d = UserDefaults.standard, y = d.integer(forKey: "RTScrollY")
+        if y > 0 { Task { try? await Task.sleep(for: .milliseconds(800)); scroll.contentOffset.y = CGFloat(y) } }
+        guard d.bool(forKey: "RTAutoScroll") else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            let t = Ticker(scroll); t.start()
+        }
+    }
+
+    private final class Ticker: NSObject {
+        let scroll: UIScrollView
+        var link: CADisplayLink?
+        var k = 0, last: CFTimeInterval = 0, gaps: [Double] = [], hits: [Double] = []
+        init(_ s: UIScrollView) { scroll = s }
+        func start() {
+            link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+            link?.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 240, preferred: 240)
+            link?.add(to: .main, forMode: .common)
+        }
+        @objc func tick(_ l: CADisplayLink) {
+            if last > 0 { gaps.append((l.timestamp - last) * 1000) }
+            last = l.timestamp
+            let maxY = max(0, scroll.contentSize.height - scroll.bounds.height)
+            scroll.contentOffset.y = min(maxY, max(0, scroll.contentOffset.y + ((k / 150) % 2 == 0 ? 120 : -120)))
+            // как наведение курсора на Mac при прокрутке: поиск элемента под точкой в середине страницы
+            let t0 = CACurrentMediaTime()
+            let pt = CGPoint(x: scroll.bounds.midX, y: scroll.bounds.midY)
+            _ = scroll.hitTest(pt, with: nil)
+            hits.append((CACurrentMediaTime() - t0) * 1000)
+            k += 1
+            guard k >= 600 else { return }
+            l.invalidate()
+            let s = gaps.sorted()
+            let r = "frames \(s.count), median \(String(format: "%.1f", s[s.count/2])) ms, p95 \(String(format: "%.1f", s[s.count*95/100])) ms, max \(Int(s.last!)) ms, >20ms: \(s.filter { $0 > 20 }.count); hitTest avg \(String(format: "%.2f", hits.reduce(0, +) / Double(hits.count))) ms, max \(String(format: "%.1f", hits.max() ?? 0)) ms"
+            try? r.write(to: URL.documentsDirectory.appending(path: "autoscroll.txt"), atomically: true, encoding: .utf8)
+        }
+    }
+}
+#endif

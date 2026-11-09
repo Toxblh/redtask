@@ -628,6 +628,12 @@ private extension DemoDB {
             (r15, release, t("Offline mode and crash fixes. Back to [[Wiki]].", "Офлайн-режим и исправления падений. Назад — [[Wiki]].")),
             (style, "Wiki", t("Swift 6, strict concurrency, *small diffs*.", "Swift 6, строгая конкурентность, *маленькие диффы*.")),
         ]
+        #if DEBUG
+        // -RTWikiFile <путь> — длинная страница «Long» в вики первого проекта (проверка прокрутки)
+        if let f = UserDefaults.standard.string(forKey: "RTWikiFile"), let text = try? String(contentsOfFile: f, encoding: .utf8) {
+            wiki[1]?.append(("Long", nil, text))
+        }
+        #endif
         wiki[2] = [("Wiki", nil, t("h1. Website\n\nSee also the [[mobile:Wiki|Mobile App wiki]].", "h1. Сайт\n\nСм. также [[mobile:Wiki|вики мобильного приложения]]."))]
         note(1236, 6, 400, t("The customer confirmed it on iPhone 15 Pro, iOS 18.3.", "Клиент подтвердил на iPhone 15 Pro, iOS 18.3."))
         note(1236, me, 125, t("Fixed in build 1.5 (512), please check.", "Исправлено в сборке 1.5 (512), проверьте, пожалуйста."), [("status_id", "2", "3"), ("done_ratio", "50", "80")])

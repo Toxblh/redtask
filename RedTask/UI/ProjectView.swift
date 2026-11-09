@@ -74,6 +74,8 @@ struct ProjectView: View {
                 Picker("Section", selection: $section) {
                     ForEach(sections) { Label($0.title, systemImage: $0.icon).tag($0) }
                 }
+                // пункты прямо в меню заголовка, без вложенного «Раздел ›» (на Mac меню выбора — подменю)
+                .pickerStyle(.inline)
             }
         }
         .task { full = try? await app.api?.projectModules(project.id) }
@@ -593,6 +595,7 @@ private struct WikiIndex: View {
     }
 }
 
+
 /// Страница вики: тот же Textile-рендер; [[ссылки]] открывают страницы здесь же.
 struct WikiPageView: View {
     @Environment(AppModel.self) private var app
@@ -601,33 +604,26 @@ struct WikiPageView: View {
     @State private var page: WikiPage?
     @State private var error: String?
     @State private var person: Named?
-    @State private var scroll = ScrollPosition()
 
     private var webURL: URL? { app.api?.url("projects/\(ref.project)/wiki/\(ref.title)") }
 
     var body: some View {
         Group {
             if let page {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                let ctx = RichContext(attachments: page.attachments, baseURL: app.api?.baseURL, onOpenAttachment: { a in
+                    guard let api = app.api else { return }
+                    Task { do { try await previewAttachment(a, api: api) } catch { self.error = error.localizedDescription } }
+                })
+                // страница строится один раз — по виду на блок — и дальше только сдвигается (StaticScroll)
+                StaticScroll(id: [page.title, page.text, page.updatedOn], items: {
+                    [AnyView(VStack(alignment: .leading, spacing: 4) {
                         Text(page.title.replacingOccurrences(of: "_", with: " ")).font(.title2.bold())
                         Text("\(page.author?.name ?? "—") · \(Fmt.dateTime(page.updatedOn)) · version \(page.version ?? 1)")
                             .font(.footnote).foregroundStyle(.secondary)
-                        RichText(text: page.text, context: RichContext(attachments: page.attachments, baseURL: app.api?.baseURL, onOpenAttachment: { a in
-                            guard let api = app.api else { return }
-                            Task { do { try await previewAttachment(a, api: api) } catch { self.error = error.localizedDescription } }
-                        }))
-                    }
-                    .padding()
-                    .frame(maxWidth: 900, alignment: .leading)
-                    .frame(maxWidth: .infinity)
-                }
-                .refreshable { await load() }
-                .scrollPosition($scroll)
-                #if DEBUG
-                // -RTScrollY <pt> — снимки середины длинной страницы
-                .task { try? await Task.sleep(for: .milliseconds(800)); scroll.scrollTo(y: CGFloat(UserDefaults.standard.integer(forKey: "RTScrollY"))) }
-                #endif
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 12))]
+                    + RichText.blockViews(page.text, ctx: ctx)
+                }, refresh: { await load() })
+                .task(id: page.text) { await RichText.prepare(page.text, app: app) }
             } else if let error {
                 LoadErrorView(message: error) { Task { await load() } }
             } else {

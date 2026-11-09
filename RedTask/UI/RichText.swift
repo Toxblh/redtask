@@ -158,6 +158,19 @@ struct RichContext {
     var onOpenAttachment: (Attachment) -> Void = { _ in }
 }
 
+/// Разобранный текст по исходнику: тело вида пересчитывается часто (прокрутка, аватары, ширина),
+/// а разбор длинной вики-страницы — дорогой.
+@MainActor enum BlockCache {
+    private static var map: [String: [TBlock]] = [:]
+    static func blocks(_ text: String) -> [TBlock] {
+        if let b = map[text] { return b }
+        if map.count > 300 { map.removeAll() }
+        let b = groupBlocks(parseTextile(text))
+        map[text] = b
+        return b
+    }
+}
+
 /// Рендер Textile блоками. Ссылки уходят в openURL окружения; внутренние — схема redtask-app.
 struct RichText: View {
     @Environment(AppModel.self) private var app
@@ -167,13 +180,27 @@ struct RichText: View {
     private var mentions: MentionStore { .shared }
 
     var body: some View {
-        BlocksView(blocks: groupBlocks(parseTextile(text)), ctx: context, muted: muted)
-            .task(id: text) {
-                let logins = mentionLogins(text)
-                await mentions.resolve(logins, refs: app.refs)
-                let ids = logins.compactMap { mentions.known[$0]?.0 }
-                await InlineAvatars.shared.load(ids, app: app)
-            }
+        BlocksView(blocks: BlockCache.blocks(text), ctx: context, muted: muted)
+            .task(id: text) { await Self.prepare(text, app: app) }
+    }
+
+    /// Логины упоминаний и их аватары — до показа текста.
+    static func prepare(_ text: String, app: AppModel) async {
+        let logins = mentionLogins(text)
+        await MentionStore.shared.resolve(logins, refs: app.refs)
+        let ids = logins.compactMap { MentionStore.shared.known[$0]?.0 }
+        await InlineAvatars.shared.load(ids, app: app)
+    }
+
+    /// Блоки верхнего уровня по отдельности, с отступами между ними — для StaticScroll:
+    /// каждый блок в своём виде, и поиск элемента под курсором не перебирает всю страницу.
+    static func blockViews(_ text: String, ctx: RichContext) -> [AnyView] {
+        let blocks = BlockCache.blocks(text)
+        return blocks.enumerated().map { i, b in
+            AnyView(BlockView(block: b, ctx: ctx, muted: false)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, i == 0 ? 0 : BlocksView.gap(blocks[i - 1], b)))
+        }
     }
 }
 
@@ -186,14 +213,14 @@ private struct BlocksView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { i, b in
                 BlockView(block: b, ctx: ctx, muted: muted)
-                    .padding(.top, i == 0 ? 0 : gap(blocks[i - 1], b))
+                    .padding(.top, i == 0 ? 0 : Self.gap(blocks[i - 1], b))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// Абзац — 10, вокруг «коробок» (цитата, код, collapse, линия) — 6, иначе вплотную.
-    private func gap(_ prev: TBlock, _ cur: TBlock) -> CGFloat {
+    static func gap(_ prev: TBlock, _ cur: TBlock) -> CGFloat {
         let boxed: Set<BlockKind> = [.code, .quote, .collapse, .rule]
         if cur.gap { return 10 }
         return boxed.contains(prev.kind) || boxed.contains(cur.kind) ? 6 : 0
@@ -290,7 +317,7 @@ private struct TableBlock: View {
         if cell.header {
             InlineText(lines: cell.text.components(separatedBy: "\n").map { .plain($0) }, ctx: ctx, muted: false, bold: cell.header)
         } else {
-            BlocksView(blocks: groupBlocks(parseTextile(cell.text)), ctx: ctx)
+            BlocksView(blocks: BlockCache.blocks(cell.text), ctx: ctx)
         }
     }
 

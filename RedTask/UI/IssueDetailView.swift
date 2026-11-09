@@ -428,7 +428,7 @@ struct IssueDetailView: View {
     private func subtasks(_ issue: Issue) -> some View {
         let canAdd = model.perms.has("manage_subtasks") && model.perms.has("add_issues")
         if !issue.children.isEmpty || canAdd {
-            Section("Subtasks") {
+            Section {
                 ForEach(issue.children) { c in
                     NavigationLink(value: IssueLink(id: c.id)) {
                         RelatedLine(id: c.id, subject: c.subject, issue: model.related[c.id])
@@ -438,10 +438,17 @@ struct IssueDetailView: View {
                 if canAdd {
                     Button { newSubtask(issue) } label: { Label("Add subtask", systemImage: "plus") }
                 }
-                // spec 3.3: подзадачи экраном как у вехи — колонки статусов, аватары, поиск
-                if !issue.children.isEmpty {
-                    NavigationLink(value: SubtaskBoardLink(id: issue.id, subject: issue.subject)) {
-                        Label("As board", systemImage: "rectangle.split.3x1")
+            } header: {
+                // spec 3.3: подзадачи экраном как у вехи — другой вид того же списка, поэтому в заголовке
+                // секции справа (как «Добавить» у таблиц), а не строкой после действия «Добавить подзадачу»
+                HStack {
+                    Text("Subtasks")
+                    Spacer()
+                    if !issue.children.isEmpty {
+                        NavigationLink(value: SubtaskBoardLink(id: issue.id, subject: issue.subject)) {
+                            Label("As board", systemImage: "rectangle.split.3x1")
+                        }
+                        .labelStyle(.titleAndIcon).font(.subheadline).textCase(nil)
                     }
                 }
             }
