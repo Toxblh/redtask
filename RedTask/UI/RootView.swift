@@ -49,11 +49,13 @@ struct RootView: View {
         }
         .tabViewStyle(.sidebarAdaptable)
         .sheet(item: $sheet) { s in
-            switch s {
+            Group { switch s {
             case .bell: NotificationsView()
             case .settings: SettingsView()
             case .newIssue(let project, let parent): NewIssueView(projectId: project, parent: parent)
-            }
+            } }
+            // явно: на Mac лист иногда открывается без окружения сцены и падает на @Environment(AppModel.self)
+            .environment(app)
         }
         .task { await app.refreshUnread() }
         .alert(Text("Couldn’t change favorites"), isPresented: Binding(get: { app.favoriteError != nil }, set: { if !$0 { app.favoriteError = nil } }),
@@ -73,6 +75,7 @@ struct RootView: View {
                     app.showWebLogin = false
                     app.cancelPendingFavorite()
                 }
+                .environment(app)
             }
         }
         #if DEBUG
@@ -110,18 +113,25 @@ struct RootView: View {
                 if projects {
                     // две колонки, а не три: рядом с сайдбаром вкладок (iPad, Mac) три дали бы четыре.
                     // В колонке списка — стек «проекты → задачи проекта», как в Почте и Заметках.
-                    NavigationSplitView(preferredCompactColumn: $compactColumn) {
+                    // колонка списка всегда видна, как в остальных разделах: со стеком внутри split view
+                    // в автоматическом режиме прячет её при выборе задачи (Mac, iPad)
+                    NavigationSplitView(columnVisibility: .constant(.all), preferredCompactColumn: $compactColumn) {
                         // переход по стеку, а не выделением в списке: выделение в свёрнутом split view (iPhone)
                         // сразу уводит в колонку детали, минуя задачи проекта
                         NavigationStack(path: $projectPath) {
                             ProjectsView()
                                 .toolbar { RootToolbar(sheet: $sheet) }
                                 .toolbar(removing: .sidebarToggle)
+                                // фон стека — прозрачный, как у колонки списка в остальных разделах
+                                .containerBackground(.clear, for: .navigation)
                                 .navigationDestination(for: Project.self) { p in
                                     ProjectView(project: p, selection: $selection, page: $page).id(p.id)
+                                        .toolbar(removing: .sidebarToggle)
+                                        .containerBackground(.clear, for: .navigation)
                                 }
                         }
                     } detail: { detail }
+                    .navigationSplitViewStyle(.balanced)
                 } else {
                     NavigationSplitView(preferredCompactColumn: $compactColumn) {
                         content($selection)

@@ -93,6 +93,7 @@ struct LoginView: View {
                         await app.adoptBrowserPass(agent: agent)
                     }
                 } onCancel: { webLogin = nil }
+                .environment(app)
             }
         }
     }
@@ -220,6 +221,7 @@ struct CaptchaButton: View {
                         waf.blocked = false
                         onSolved()
                     }
+                    .environment(app)
                 }
         }
     }

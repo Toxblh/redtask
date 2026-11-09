@@ -288,7 +288,7 @@ struct RelationSheet: View {
             .sheet(isPresented: $picking) {
                 let issue = model.issue
                 let related = Set((issue?.relations ?? []).flatMap { [$0.issueId, $0.issueToId] } + [model.issueId])
-                IssuePicker(title: "Add relation", exclude: related) { target = $0 }
+                IssuePicker(title: "Add relation", exclude: related) { target = $0 }.environment(app)
             }
         }
         .presentationDetents([.medium, .large])

@@ -122,7 +122,7 @@ struct IssueDetailView: View {
         // на iPhone нижний тулбар действий заменяет таб-бар (как у экрана письма в Mail); на iPad таб-бар — это сайдбар, его не трогаем
         .toolbar(hSize == .compact && model.issue != nil ? .hidden : .automatic, for: .tabBar)
         .environment(\.openURL, OpenURLAction { url in handle(url) })
-        .sheet(item: $sheet) { s in sheetView(s) }
+        .sheet(item: $sheet) { s in sheetView(s).environment(app) }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { r in
             if case .success(let urls) = r { sheet = .upload(urls.compactMap(readFile)) }
         }
@@ -139,7 +139,7 @@ struct IssueDetailView: View {
             Button("Delete", role: .destructive) { Task { await c.action() } }
         }
         .errorAlert($model.actionError)
-        .sheet(item: $webFallback) { url in SafariView(url: url).ignoresSafeArea() }
+        .sheet(item: $webFallback) { url in SafariView(url: url).ignoresSafeArea().environment(app) }
     }
 
     /// Фрагмент «note-N» / «change-ID» → журнал (journalForFragment), прокрутка и подсветка.

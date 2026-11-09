@@ -138,7 +138,7 @@ private struct ProjectOverview: View {
         .listStyle(.insetGrouped)
         .task { if members.isEmpty { members = (try? await app.api?.memberships(project.id)) ?? [] } }
         .refreshable { members = (try? await app.api?.memberships(project.id)) ?? members }
-        .sheet(item: $person) { PersonCard(userId: $0.id) }
+        .sheet(item: $person) { PersonCard(userId: $0.id).environment(app) }
     }
 }
 
@@ -483,6 +483,7 @@ private struct AssigneeAvatars: View {
                     }
                     .frame(minWidth: 260, maxHeight: 420)
                     .presentationCompactAdaptation(.popover)
+                    .environment(app)
                 }
             }
         }
@@ -641,7 +642,7 @@ struct WikiPageView: View {
             }
         }
         .environment(\.openURL, OpenURLAction { handle($0) })
-        .sheet(item: $person) { PersonCard(userId: $0.id) }
+        .sheet(item: $person) { PersonCard(userId: $0.id).environment(app) }
         .task { if page == nil { await load() } }
     }
 

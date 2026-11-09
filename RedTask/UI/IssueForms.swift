@@ -198,7 +198,7 @@ struct EditIssueView: View {
             }
             .navigationTitle("Edit issue")
             .sheet(isPresented: $pickParent) {
-                IssuePicker(title: "Parent issue", exclude: [issue.id]) { parent = String($0.id) }
+                IssuePicker(title: "Parent issue", exclude: [issue.id]) { parent = String($0.id) }.environment(app)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

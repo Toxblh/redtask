@@ -24,6 +24,12 @@ struct TextileEditor: View {
     @FocusState private var focused: Bool
     @State private var mentions = MentionSearch()
 
+    #if targetEnvironment(macCatalyst)
+    static let isMac = true
+    #else
+    static let isMac = false
+    #endif
+
     enum Lookup: String, Identifiable { case mention, issue; var id: String { rawValue } }
 
     var body: some View {
@@ -66,10 +72,15 @@ struct TextileEditor: View {
                     }
                     // панель разметки — полосой над клавиатурой, пока поле в фокусе. Не .toolbar(.keyboard):
                     // прокручиваемый ряд там сжимается до пары кнопок или не показывается вовсе
+                    // на Mac панель и подсказка не зависят от фокуса и не меняют размер поля: иначе вставка
+                    // сжимает редактор, тот теряет фокус, панель пропадает — и так по кругу (мерцание)
+                    .overlay(alignment: .bottom) {
+                        if Self.isMac, let q = mentionQ { suggestions(q) }
+                    }
                     .safeAreaInset(edge: .bottom, spacing: 0) {
-                        if focused {
+                        if Self.isMac || focused {
                             VStack(spacing: 0) {
-                                if let q = mentionQ { suggestions(q) }
+                                if !Self.isMac, let q = mentionQ { suggestions(q) }
                                 formatBar
                             }
                         }
@@ -90,12 +101,13 @@ struct TextileEditor: View {
             Button("Cancel", role: .cancel) {}
         }
         .sheet(item: $picker) { p in
-            switch p {
+            Group { switch p {
             case .mention: PeoplePicker(search: mentions) { person in
                 apply { TextileEdit.insert($0, $1, mentionText(person)) }
             }
             case .issue: IssuePicker(title: "Link to issue") { issue in apply { TextileEdit.insert($0, $1, "#\(issue.id) ") } }
-            }
+            } }
+            .environment(app)
         }
     }
 
