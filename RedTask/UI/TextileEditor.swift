@@ -239,7 +239,7 @@ struct PeoplePicker: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } } }
             .task(id: query) { await search.search(query.trimmingCharacters(in: .whitespaces), app: app) }
         }
-        .presentationDetents([.medium, .large])
+        .halfSheet()
     }
 }
 
@@ -282,6 +282,6 @@ struct IssuePicker: View {
                 found = (try? await api.findIssues(query)) ?? []
             }
         }
-        .presentationDetents([.medium, .large])
+        .halfSheet()
     }
 }

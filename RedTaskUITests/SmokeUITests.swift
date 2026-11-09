@@ -23,8 +23,14 @@ final class SmokeUITests: XCTestCase {
             .sorted { app.buttons[$0].frame.minY < app.buttons[$1].frame.minY }
     }
 
+    /// Элемент по точной подписи любого типа: строка проекта — текст на iPhone и кнопка-ссылка на iPad.
+    private func any(_ app: XCUIApplication, _ label: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
+    }
+
     func testTabs() {
-        let app = launch()
+        // вкладка явно: иначе откроется та, что запомнила сцена после предыдущего теста
+        let app = launch("-RTTab", "mine")
         // по вхождению в любой элемент: в iOS 27 строка списка — один элемент доступности с общей подписью
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'Crash when opening a notification'")).firstMatch
             .waitForExistence(timeout: 20))
@@ -33,7 +39,7 @@ final class SmokeUITests: XCTestCase {
         tab(app, "Favorites")
         XCTAssertTrue(app.navigationBars["Favorites"].waitForExistence(timeout: 5))
         tab(app, "Projects")
-        XCTAssertTrue(app.staticTexts["Mobile App"].waitForExistence(timeout: 5))
+        XCTAssertTrue(any(app, "Mobile App").waitForExistence(timeout: 5))
         tab(app, "My")
         XCTAssertTrue(app.navigationBars["My Issues"].waitForExistence(timeout: 5))
         // поиск последним: в iOS 26 вкладка поиска сворачивает таб-бар в кнопку
@@ -62,12 +68,12 @@ final class SmokeUITests: XCTestCase {
     /// Закрепление проекта свайпом и контекстным меню (spec 2.1).
     func testProjectPins() {
         let app = launch("-RTTab", "projects")
-        let row = app.staticTexts["Website"]
+        let row = any(app, "Website")
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         row.swipeRight()
         app.buttons["Pin"].tap()
         XCTAssertTrue(app.staticTexts["Pinned"].waitForExistence(timeout: 5))
-        app.staticTexts["Infrastructure"].press(forDuration: 1.2)
+        any(app, "Infrastructure").press(forDuration: 1.2)
         app.buttons["Add to Pinned"].tap()
         XCTAssertTrue(app.images["Pinned"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.images.matching(identifier: "Pinned").count, 4) // по 2 строки: в «Закреплённых» и в общем списке

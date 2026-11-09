@@ -185,6 +185,9 @@ struct RootView: View {
                         if let id = selection {
                             IssueDetailView(issueId: id, fragment: fragment, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })
                                 .id(id)
+                        } else if projects && projectPath.isEmpty {
+                            // в «Проектах» до выбора проекта задачу выбрать неоткуда
+                            ContentUnavailableView("Select a project", systemImage: "folder")
                         } else {
                             ContentUnavailableView("Select an issue", systemImage: "checklist")
                         }

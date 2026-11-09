@@ -178,7 +178,7 @@ struct UploadSheet: View {
             }
             .overlay { if model.busy { ProgressView().controlSize(.large) } }
         }
-        .presentationDetents([.medium, .large])
+        .halfSheet()
     }
 }
 
@@ -239,7 +239,7 @@ struct TimeSheet: View {
                 }
             }
         }
-        .presentationDetents([.medium, .large])
+        .halfSheet()
     }
 }
 
@@ -291,7 +291,7 @@ struct RelationSheet: View {
                 IssuePicker(title: "Add relation", exclude: related) { target = $0 }.environment(app)
             }
         }
-        .presentationDetents([.medium, .large])
+        .halfSheet()
     }
 }
 
@@ -304,7 +304,7 @@ struct PersonCard: View {
             PersonPage(userId: userId, root: true)
                 .navigationDestination(for: Int.self) { PersonPage(userId: $0) }
         }
-        .presentationDetents([.medium, .large])
+        .halfSheet()
     }
 }
 
@@ -482,6 +482,6 @@ struct CustomRowSheet: View {
             .navigationDestination(for: Int.self) { PersonPage(userId: $0) }
             .toolbar { ToolbarItem(placement: .cancellationAction) { SheetCancelButton { dismiss() } } }
         }
-        .presentationDetents([.medium, .large])
+        .halfSheet()
     }
 }

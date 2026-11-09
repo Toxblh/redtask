@@ -732,3 +732,17 @@ struct StaticScroll: UIViewControllerRepresentable {
     }
 }
 #endif
+
+extension View {
+    /// Короткий выбор: на iPhone — половина экрана с ручкой (растягивается до полного); на iPad и Mac лист —
+    /// окно формы фиксированной высоты, и половина обрезала строки (профиль, «Учесть время»), поэтому полный.
+    func halfSheet() -> some View { modifier(HalfSheet()) }
+}
+
+private struct HalfSheet: ViewModifier {
+    // по устройству, а не по классу размера: внутри листа на iPad класс ширины — compact
+    private let phone = UIDevice.current.userInterfaceIdiom == .phone
+    func body(content: Content) -> some View {
+        content.presentationDetents(phone ? [.medium, .large] : [.large])
+    }
+}

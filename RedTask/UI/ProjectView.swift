@@ -79,6 +79,10 @@ struct ProjectView: View {
             }
         }
         .task { full = try? await app.api?.projectModules(project.id) }
+        #if DEBUG
+        // -RTSection issues|overview|versions|wiki|files — раздел проекта сразу (снимки)
+        .onAppear { if let s = UserDefaults.standard.string(forKey: "RTSection").flatMap(ProjectSection.init) { section = s } }
+        #endif
     }
 }
 
