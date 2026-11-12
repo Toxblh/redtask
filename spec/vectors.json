@@ -1933,5 +1933,402 @@
         }
       }
     ]
+  },
+  "filter_catalog": {
+    "_": "17.1: из HTML страницы задач — availableFilters и operatorByType. values — пары [подпись, id] (лишние элементы отбрасываются), нет values — []. Порядок — как в availableFilters.",
+    "html": "<script>\n//<![CDATA[\nvar datepickerOptions={dateFormat: 'yy-mm-dd'};\nvar availableFilters = {\"status_id\":{\"type\":\"list_status\",\"name\":\"Статус\",\"remote\":true},\"tracker_id\":{\"type\":\"list_with_history\",\"name\":\"Трекер\",\"values\":[[\"Ошибка\",\"1\"],[\"Задача\",\"4\"]]},\"assigned_to_id\":{\"type\":\"list_optional_with_history\",\"name\":\"Назначена\",\"remote\":true},\"subject\":{\"type\":\"text\",\"name\":\"Тема\"},\"cf_472\":{\"type\":\"list_optional\",\"name\":\"Продукт\",\"values\":[[\"Альт Сервер\",\"Альт Сервер\"],[\"Альт Рабочая станция\",\"Альт Рабочая станция\"]]},\"project_id\":{\"type\":\"list_subprojects\",\"name\":\"Проект\",\"values\":[[\"Альт\",\"5539\",\"alt\"],[\"  » Сервер\",\"1976\",\"alt-server\"]]}};\nvar operatorLabels = {\"=\":\"соответствует\"};\nvar operatorByType = {\"list_status\":[\"o\",\"=\",\"!\",\"c\",\"*\"],\"list_with_history\":[\"=\",\"!\"],\"list_optional_with_history\":[\"=\",\"!\",\"!*\",\"*\"],\"text\":[\"~\",\"!~\",\"!*\",\"*\"],\"list_optional\":[\"=\",\"!\",\"!*\",\"*\"],\"list_subprojects\":[\"*\",\"!*\",\"=\",\"!\"]};\n//]]>\n</script>",
+    "expected": [
+      {
+        "field": "status_id",
+        "name": "Статус",
+        "type": "list_status",
+        "ops": [
+          "o",
+          "=",
+          "!",
+          "c",
+          "*"
+        ],
+        "values": [],
+        "remote": true
+      },
+      {
+        "field": "tracker_id",
+        "name": "Трекер",
+        "type": "list_with_history",
+        "ops": [
+          "=",
+          "!"
+        ],
+        "values": [
+          [
+            "Ошибка",
+            "1"
+          ],
+          [
+            "Задача",
+            "4"
+          ]
+        ],
+        "remote": false
+      },
+      {
+        "field": "assigned_to_id",
+        "name": "Назначена",
+        "type": "list_optional_with_history",
+        "ops": [
+          "=",
+          "!",
+          "!*",
+          "*"
+        ],
+        "values": [],
+        "remote": true
+      },
+      {
+        "field": "subject",
+        "name": "Тема",
+        "type": "text",
+        "ops": [
+          "~",
+          "!~",
+          "!*",
+          "*"
+        ],
+        "values": [],
+        "remote": false
+      },
+      {
+        "field": "cf_472",
+        "name": "Продукт",
+        "type": "list_optional",
+        "ops": [
+          "=",
+          "!",
+          "!*",
+          "*"
+        ],
+        "values": [
+          [
+            "Альт Сервер",
+            "Альт Сервер"
+          ],
+          [
+            "Альт Рабочая станция",
+            "Альт Рабочая станция"
+          ]
+        ],
+        "remote": false
+      },
+      {
+        "field": "project_id",
+        "name": "Проект",
+        "type": "list_subprojects",
+        "ops": [
+          "*",
+          "!*",
+          "=",
+          "!"
+        ],
+        "values": [
+          [
+            "Альт",
+            "5539"
+          ],
+          [
+            "  » Сервер",
+            "1976"
+          ]
+        ],
+        "remote": false
+      }
+    ]
+  },
+  "filter_params": {
+    "_": "17.2: условия → параметры issues.json по порядку. Операторы без значений — без v. Пустая сортировка — без sort.",
+    "cases": [
+      {
+        "filters": [
+          {
+            "field": "status_id",
+            "op": "o",
+            "values": []
+          },
+          {
+            "field": "assigned_to_id",
+            "op": "=",
+            "values": [
+              "me",
+              "13781"
+            ]
+          },
+          {
+            "field": "cf_472",
+            "op": "=",
+            "values": [
+              "Альт Сервер"
+            ]
+          },
+          {
+            "field": "updated_on",
+            "op": ">t-",
+            "values": [
+              "7"
+            ]
+          },
+          {
+            "field": "subject",
+            "op": "~",
+            "values": [
+              "vpn"
+            ]
+          }
+        ],
+        "sort": [
+          [
+            "priority",
+            "desc"
+          ],
+          [
+            "updated_on",
+            "desc"
+          ]
+        ],
+        "expected": [
+          [
+            "set_filter",
+            "1"
+          ],
+          [
+            "f[]",
+            "status_id"
+          ],
+          [
+            "op[status_id]",
+            "o"
+          ],
+          [
+            "f[]",
+            "assigned_to_id"
+          ],
+          [
+            "op[assigned_to_id]",
+            "="
+          ],
+          [
+            "v[assigned_to_id][]",
+            "me"
+          ],
+          [
+            "v[assigned_to_id][]",
+            "13781"
+          ],
+          [
+            "f[]",
+            "cf_472"
+          ],
+          [
+            "op[cf_472]",
+            "="
+          ],
+          [
+            "v[cf_472][]",
+            "Альт Сервер"
+          ],
+          [
+            "f[]",
+            "updated_on"
+          ],
+          [
+            "op[updated_on]",
+            ">t-"
+          ],
+          [
+            "v[updated_on][]",
+            "7"
+          ],
+          [
+            "f[]",
+            "subject"
+          ],
+          [
+            "op[subject]",
+            "~"
+          ],
+          [
+            "v[subject][]",
+            "vpn"
+          ],
+          [
+            "sort",
+            "priority:desc,updated_on:desc"
+          ]
+        ]
+      },
+      {
+        "filters": [
+          {
+            "field": "status_id",
+            "op": "*",
+            "values": [
+              "ignored"
+            ]
+          }
+        ],
+        "sort": [],
+        "expected": [
+          [
+            "set_filter",
+            "1"
+          ],
+          [
+            "f[]",
+            "status_id"
+          ],
+          [
+            "op[status_id]",
+            "*"
+          ]
+        ]
+      }
+    ]
+  },
+  "query_form": {
+    "_": "17.3: поля веб-формы сохранения после authenticity_token. visibility: 0 — только мне, 1 — ролям (+ query[role_ids][]), 2 — всем. for_all — query_is_for_all=1. Затем условия как в filter_params без set_filter и без sort, затем сортировка query[sort_criteria][i][]: поле, направление.",
+    "cases": [
+      {
+        "name": "Мои открытые",
+        "description": "",
+        "visibility": 0,
+        "role_ids": [],
+        "for_all": false,
+        "filters": [
+          {
+            "field": "status_id",
+            "op": "o",
+            "values": []
+          }
+        ],
+        "sort": [
+          [
+            "updated_on",
+            "desc"
+          ]
+        ],
+        "expected": [
+          [
+            "query[name]",
+            "Мои открытые"
+          ],
+          [
+            "query[description]",
+            ""
+          ],
+          [
+            "query[visibility]",
+            "0"
+          ],
+          [
+            "f[]",
+            "status_id"
+          ],
+          [
+            "op[status_id]",
+            "o"
+          ],
+          [
+            "query[sort_criteria][0][]",
+            "updated_on"
+          ],
+          [
+            "query[sort_criteria][0][]",
+            "desc"
+          ]
+        ]
+      },
+      {
+        "name": "Для ролей",
+        "description": "Пресейл",
+        "visibility": 1,
+        "role_ids": [
+          3,
+          7
+        ],
+        "for_all": true,
+        "filters": [
+          {
+            "field": "tracker_id",
+            "op": "=",
+            "values": [
+              "4"
+            ]
+          }
+        ],
+        "sort": [],
+        "expected": [
+          [
+            "query[name]",
+            "Для ролей"
+          ],
+          [
+            "query[description]",
+            "Пресейл"
+          ],
+          [
+            "query[visibility]",
+            "1"
+          ],
+          [
+            "query[role_ids][]",
+            "3"
+          ],
+          [
+            "query[role_ids][]",
+            "7"
+          ],
+          [
+            "query_is_for_all",
+            "1"
+          ],
+          [
+            "f[]",
+            "tracker_id"
+          ],
+          [
+            "op[tracker_id]",
+            "="
+          ],
+          [
+            "v[tracker_id][]",
+            "4"
+          ]
+        ]
+      }
+    ]
+  },
+  "query_saved": {
+    "_": "17.3: Location ответа 302 → id сохранённого запроса; не на список задач с query_id — null.",
+    "cases": [
+      [
+        "https://my.example/projects/alt/issues?query_id=1140",
+        1140
+      ],
+      [
+        "/issues?query_id=7",
+        7
+      ],
+      [
+        "https://my.example/projects/alt/issues?set_filter=1&query_id=12&page=2",
+        12
+      ],
+      [
+        "https://my.example/projects/alt/queries/new",
+        null
+      ],
+      [
+        "https://my.example/login?back_url=%2Fqueries",
+        null
+      ]
+    ]
   }
 }
