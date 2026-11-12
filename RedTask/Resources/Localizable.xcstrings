@@ -1645,16 +1645,6 @@
         }
       }
     },
-    "iOS decides when to run background checks — usually not more often than every 15 minutes, and less often if you rarely open the app. RedTask also checks every time you return to it." : {
-      "localizations" : {
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Когда запускать фоновую проверку, решает iOS — обычно не чаще раза в 15 минут и реже, если приложением пользуются нечасто. Кроме того, RedTask проверяет изменения каждый раз, когда вы в него возвращаетесь."
-          }
-        }
-      }
-    },
     "Issue" : {
       "localizations" : {
         "ru" : {
@@ -4172,6 +4162,56 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Все запросы"
+          }
+        }
+      }
+    },
+    "Mark all as read" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пометить всё прочитанным"
+          }
+        }
+      }
+    },
+    "Last attempt failed: %@" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Последняя попытка не удалась: %@"
+          }
+        }
+      }
+    },
+    "Server responded %lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сервер ответил %lld"
+          }
+        }
+      }
+    },
+    "%lld unread" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Непрочитанных: %lld"
+          }
+        }
+      }
+    },
+    "RedTask asks iOS to check every 5 minutes, but iOS decides when background checks actually run — often less frequently, especially if you rarely open the app. RedTask also checks every time you return to it." : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RedTask просит iOS проверять каждые 5 минут, но когда запускать фоновую проверку, решает iOS — часто реже, особенно если приложением пользуются нечасто. Кроме того, RedTask проверяет изменения каждый раз, когда вы в него возвращаетесь."
           }
         }
       }

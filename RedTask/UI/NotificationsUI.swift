@@ -6,7 +6,6 @@ struct NotificationsView: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var entries: [NotifEntry] = []
-    @State private var unread = Set<String>()
     @State private var group: NotifGroup?
     @State private var loading = true
 
@@ -19,11 +18,17 @@ struct NotificationsView: View {
         @Bindable var app = app
         NavigationStack {
             List {
+                // открытие списка ничего не помечает (spec 19.2): прочитанным уведомление делает открытие задачи
+                if entries.contains(where: { app.isUnread($0) }) {
+                    Section {
+                        Button { app.markAllRead() } label: { Label("Mark all as read", systemImage: "checkmark.circle") }
+                    }
+                }
                 if app.settings.notifByIssue {
                     ForEach(groupByIssue(shown)) { day in
                         Section(dayTitle(day.date)) {
                             ForEach(day.groups) { g in
-                                Button { open(g.issueId, g.journalId) } label: { IssueGroupRow(group: g, unread: g.unread(unread)) }
+                                Button { open(g.issueId, g.journalId) } label: { IssueGroupRow(group: g, unread: g.unread(app.readState)) }
                                     .buttonStyle(.plain)
                                     .contextMenu { muteMenu(g.latest) }
                             }
@@ -33,7 +38,7 @@ struct NotificationsView: View {
                     ForEach(days(shown), id: \.0) { day, list in
                         Section(dayTitle(day)) {
                             ForEach(list) { e in
-                                Button { open(e.issueId, e.journalId) } label: { NotifRow(entry: e, unread: unread.contains(e.key)) }
+                                Button { open(e.issueId, e.journalId) } label: { NotifRow(entry: e, unread: app.isUnread(e)) }
                                     .buttonStyle(.plain)
                                     .contextMenu { muteMenu(e) }
                             }
@@ -49,7 +54,7 @@ struct NotificationsView: View {
             }
             .refreshable {
                 await Poller.poll()
-                await reload(markRead: false)
+                await reload()
             }
             .navigationTitle("Notifications")
             .navigationBarTitleDisplayMode(.inline)
@@ -72,18 +77,16 @@ struct NotificationsView: View {
             }
         }
         .task {
-            await reload(markRead: true)
+            await reload()
             if await NotifStore.shared.needsBackfill() {
                 await Poller.backfill()
-                await reload(markRead: false)
+                await reload()
             }
         }
     }
 
-    /// Открытие колокольчика помечает всё прочитанным; подсветка «новое» остаётся до закрытия.
-    private func reload(markRead: Bool) async {
+    private func reload() async {
         entries = await NotifStore.shared.load()
-        if markRead { unread.formUnion(await NotifStore.shared.takeUnread()) }
         loading = false
         await app.refreshUnread()
     }
@@ -137,6 +140,11 @@ private struct NotifRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            // непрочитанное — точка акцента слева (spec 19.2); место под неё есть всегда, строки ровные
+            Circle().fill(.tint).frame(width: 8, height: 8).padding(.top, 14).padding(.trailing, -4)
+                .opacity(unread ? 1 : 0)
+                .accessibilityHidden(!unread)
+                .accessibilityLabel("New")
             ZStack(alignment: .bottomTrailing) {
                 if let id = entry.avatarUserId { Avatar(name: entry.authorName, userId: id, size: 36) }
                 else { Image(systemName: NotifCategory.of(entry.type).symbol).font(.title3).frame(width: 36, height: 36).foregroundStyle(.secondary) }
@@ -155,17 +163,13 @@ private struct NotifRow: View {
                     Text(entry.date, format: .dateTime.hour().minute())
                 }
                 .font(.caption).foregroundStyle(.secondary)
-                Text(entry.subject).font(.subheadline.weight(unread ? .bold : .semibold)).lineLimit(2)
+                Text(entry.subject).font(.subheadline.weight(unread ? .bold : .regular)).lineLimit(2)
                 ForEach(entry.lines, id: \.self) { Text($0).font(.subheadline).foregroundStyle(.secondary).lineLimit(4) }
                 if !app.settings.notifies(entry) {
                     Label("Muted", systemImage: "bell.slash").font(.caption).foregroundStyle(.tertiary)
                 }
             }
             if let id = entry.imageId { NotifThumb(attachmentId: id) }
-            if unread {
-                Circle().fill(.tint).frame(width: 8, height: 8).padding(.top, 6)
-                    .accessibilityLabel("New")
-            }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -204,13 +208,14 @@ private struct IssueGroupRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
+                if unread { Circle().fill(.tint).frame(width: 8, height: 8).accessibilityLabel("New") }
                 Text(verbatim: "#\(group.issueId)").monospacedDigit()
                 Text(group.latest.project).lineLimit(1)
                 Spacer()
                 Text(group.latest.date, format: .dateTime.hour().minute())
             }
             .font(.caption).foregroundStyle(.secondary)
-            Text(group.latest.subject).font(.subheadline.weight(unread ? .bold : .semibold)).lineLimit(2)
+            Text(group.latest.subject).font(.subheadline.weight(unread ? .bold : .regular)).lineLimit(2)
             HStack(spacing: 6) {
                 ForEach(group.types.prefix(6), id: \.self) { t in
                     Image(systemName: NotifCategory.of(t).symbol).accessibilityLabel(NotifCategory.of(t).title)
@@ -265,13 +270,21 @@ struct SettingsView: View {
                     Toggle("Notifications", isOn: $app.settings.notificationsEnabled)
                         .onChange(of: app.settings.notificationsEnabled) { Poller.schedule() }
                     NavigationLink("Categories and filters") { NotifSettingsView() }
-                    LabeledContent("Last check", value: app.settings.lastCheck.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? String(localized: "never"))
+                    // spec 18: время последней удачной проверки и причина, если последняя не удалась
+                    LabeledContent("Last check") {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(app.settings.lastCheck.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? String(localized: "never"))
+                            if let e = app.settings.lastCheckError {
+                                Text("Last attempt failed: \(e)").font(.caption).foregroundStyle(.red).multilineTextAlignment(.trailing)
+                            }
+                        }
+                    }
                     Button("Check now") { Task { await Poller.poll() } }
                     SystemPermissionRow()
                 } header: {
                     Text("Notifications")
                 } footer: {
-                    Text("iOS decides when to run background checks — usually not more often than every 15 minutes, and less often if you rarely open the app. RedTask also checks every time you return to it.")
+                    Text("RedTask asks iOS to check every 5 minutes, but iOS decides when background checks actually run — often less frequently, especially if you rarely open the app. RedTask also checks every time you return to it.")
                 }
                 CacheSection()
                 Section("About") {

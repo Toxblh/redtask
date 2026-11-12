@@ -349,7 +349,8 @@ enum Poller {
             return
         }
         let r = BGAppRefreshTaskRequest(identifier: taskId)
-        r.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+        // spec 18: раз в 5 минут; iOS всё равно запускает по своему усмотрению
+        r.earliestBeginDate = Date(timeIntervalSinceNow: 5 * 60)
         try? BGTaskScheduler.shared.submit(r)
     }
 
@@ -383,12 +384,21 @@ enum Poller {
             let fresh = try await NotifStore.shared.appendAll(entries)
             try await NotifStore.shared.saveState(state)
             app.settings.lastCheck = now
+            app.settings.lastCheckError = nil
             if s.notificationsEnabled { await post(fresh.filter { app.settings.notifies($0) }) }
             await app.refreshUnread()
+            Task { await app.refreshQueryBadges() }
             return true
         } catch {
+            if app.settings.account == s.account { app.settings.lastCheckError = checkError(error) }
             return false
         }
+    }
+
+    /// Причина неудачной проверки для «Последняя проверка» (spec 18).
+    private static func checkError(_ e: Error) -> String {
+        if let r = e as? RedmineError { return (400...599).contains(r.code) ? String(localized: "Server responded \(r.code)") : r.message }
+        return String(localized: "No connection")
     }
 
     /// Превью вложения (thumbnail 400) во временный JPEG.
@@ -460,7 +470,7 @@ enum Poller {
             do {
                 let (entries, _) = try await PollCollector(api: api, refs: refs, s: app.settings, pages: 1)
                     .collect(since: now.addingTimeInterval(-7 * 86400), now: now, saved: nil)
-                _ = try await NotifStore.shared.appendAll(entries.filter { $0.at <= until }, unread: false)
+                _ = try await NotifStore.shared.appendAll(entries.filter { $0.at <= until })
                 await NotifStore.shared.markBackfilled()
             } catch {}
         }.value

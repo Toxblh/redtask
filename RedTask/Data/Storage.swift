@@ -60,6 +60,8 @@ struct AppSettings: Codable, Sendable, Equatable {
     var userLogin = ""
     var notificationsEnabled = true
     var lastCheck: Date?
+    /// Почему не удалась последняя проверка (spec 18); nil — удалась.
+    var lastCheckError: String?
     /// Избранное сервера (кэш набора, источник правды — сервер).
     var favorites: [Int] = []
     /// Избранное прежних версий (хранилось только здесь) — ждёт переноса на сервер.

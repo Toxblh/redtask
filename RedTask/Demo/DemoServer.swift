@@ -173,10 +173,10 @@ private struct DemoDB {
             // сохранённый запрос: его условия и сортировка вместо параметров
             if let qid = p("query_id").flatMap(Int.init) {
                 guard let sq = queries.first(where: { $0.id == qid }) else { return notFound }
-                var items = q.filter { ["project_id", "limit", "offset"].contains($0.name) } + [URLQueryItem(name: "set_filter", value: "1")]
+                var items = q.filter { ["project_id", "limit", "offset", "sort"].contains($0.name) } + [URLQueryItem(name: "set_filter", value: "1")]
                 items += sq.form.filter { !$0.0.hasPrefix("query[") }.map { URLQueryItem(name: $0.0, value: $0.1) }
                 let sc = sq.form.filter { $0.0.hasPrefix("query[sort_criteria]") }.map { $0.1 }
-                if sc.count >= 2 { items.append(URLQueryItem(name: "sort", value: "\(sc[0]):\(sc[1])")) }
+                if sc.count >= 2 && p("sort") == nil { items.append(URLQueryItem(name: "sort", value: "\(sc[0]):\(sc[1])")) }
                 return list({ n in items.first { $0.name == n }?.value }, items)
             }
             return list(p, q)

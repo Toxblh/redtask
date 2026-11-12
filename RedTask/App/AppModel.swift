@@ -23,7 +23,15 @@ final class AppModel {
     var settings: AppSettings { didSet { if settings != oldValue && !isDemo { settings.save() } } }
     private(set) var api: RedmineAPI?
     private(set) var refs: RefData?
+    /// Непрочитанные уведомления (spec 19.2) — бейдж колокольчика и иконки.
     var unreadCount = 0
+    /// Прочитано и непрочитано (spec 19.1): файл в Application Support; в демо — только память.
+    var readState = ReadState() {
+        didSet { if readState != oldValue && !isDemo { try? Files.write(readState, Self.readFile) } }
+    }
+    /// Непрочитанные задачи избранных запросов (spec 19.3): id запроса → задача → updated_on.
+    private(set) var queryUnread: [String: [Int: Int64]] = [:]
+    private var queryCountedAt: [String: Date] = [:]
     var openRequest: OpenRequest?
     /// Растёт, когда списки могли устареть (сохранили задачу, создали новую): видимый список тихо перезапрашивается.
     var listEpoch = 0
@@ -59,7 +67,14 @@ final class AppModel {
             }
         }
         restoreBrowserPass()
-        if isLoggedIn { Task { await refreshFavorites() } }
+        if isLoggedIn {
+            // первый запуск версии со spec 19 — всё, что было до него, прочитано
+            if let r = Files.read(ReadState.self, Self.readFile) { readState = r } else {
+                readState.markAll(now: Self.nowMs)
+                try? Files.write(readState, Self.readFile) // didSet в init не срабатывает
+            }
+            Task { await refreshFavorites() }
+        }
         #if DEBUG
         debugLaunch()
         #endif
@@ -125,6 +140,7 @@ final class AppModel {
         Keychain.save(key, account: s.account)
         settings = s
         connect(url: url, key: key)
+        readState = ReadState(baseline: Self.nowMs)
         unreadCount = 0
         // тихое разрешение: без системного вопроса при входе (HIG — спрашивать по месту)
         await Poller.requestProvisional()
@@ -146,6 +162,8 @@ final class AppModel {
         settings = s
         try? FileManager.default.removeItem(at: Files.caches.appendingPathComponent(settings.accountKey))
         connect(url: DemoServer.base, key: "demo")
+        // демо: события последних полутора часов — непрочитанные (точки и бейджи видны на снимках)
+        readState = ReadState(baseline: Self.nowMs - 90 * 60 * 1000)
         unreadCount = 0
         // колокольчик — обычным опросом по демо-данным: свежие события станут непрочитанными
         Task {
@@ -169,12 +187,17 @@ final class AppModel {
         unreadCount = 0
         pendingFavorite = nil
         queriesRetried = []
+        queryUnread = [:]
+        queryCountedAt = [:]
+        readState = ReadState()
         if isDemo {
             // настройки демо на диск не попадали — возвращаем сохранённые (вышедшие) настройки
             isDemo = false
             settings = AppSettings.load()
+            readState = Files.read(ReadState.self, Self.readFile) ?? ReadState()
             return
         }
+        try? FileManager.default.removeItem(at: Self.readFile)
         var s = settings
         s.userId = 0
         s.userName = ""
@@ -186,6 +209,7 @@ final class AppModel {
         s.recentFilters = []
         s.favoriteQueries = []
         s.lastCheck = nil
+        s.lastCheckError = nil
         settings = s
     }
 
@@ -369,9 +393,63 @@ final class AppModel {
 
     func open(_ issueId: Int, fragment: String? = nil) { openRequest = OpenRequest(issueId: issueId, fragment: fragment) }
 
+    // MARK: - Прочитано и непрочитано (spec 19)
+
+    private static var readFile: URL { Files.support.appendingPathComponent("read-state.json") }
+    static var nowMs: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+
+    func isUnread(_ issue: Issue) -> Bool { redmineMillis(issue.updatedOn).map { readState.isUnread(issue.id, $0) } ?? false }
+    func isUnread(_ e: NotifEntry) -> Bool { readState.isUnread(e.issueId, e.at) }
+
+    /// Свежая версия задачи с сервера на экране — просмотр: точки, бейджи и колокольчик меняются сразу.
+    func viewed(_ issue: Issue) {
+        guard let u = redmineMillis(issue.updatedOn), readState.seen[issue.id] != u else { return }
+        readState.view(issue.id, u)
+        Task { await refreshUnread() }
+    }
+
+    func markAllRead() {
+        readState.markAll(now: Self.nowMs)
+        Task { await refreshUnread() }
+    }
+
     func refreshUnread() async {
-        unreadCount = await NotifStore.shared.unread().count
+        let entries = await NotifStore.shared.load()
+        unreadCount = entries.filter { isUnread($0) }.count
         try? await UNUserNotificationCenter.current().setBadgeCount(unreadCount)
+    }
+
+    /// Бейдж избранного запроса: сколько из его непрочитанных задач всё ещё непрочитаны.
+    func queryBadge(_ id: String) -> Int { queryUnread[id]?.filter { readState.isUnread($0.key, $0.value) }.count ?? 0 }
+
+    /// Пересчёт бейджей избранных запросов (опрос, показ вкладки) — не чаще раза в минуту на запрос.
+    func refreshQueryBadges() async {
+        guard let api else { return }
+        for saved in settings.favoriteQueries {
+            let run = resolved(saved)
+            if let t = queryCountedAt[run.id], Date().timeIntervalSince(t) < 60 { continue }
+            queryCountedAt[run.id] = Date()
+            if let found = try? await unreadIssues(run.filter, api: api), api === self.api { queryUnread[run.id] = found }
+        }
+    }
+
+    /// Тот же запрос свежими сверху, страницами по 100 — до задачи не новее рубежа или до 100 непрочитанных.
+    private func unreadIssues(_ filter: IssueFilter, api: RedmineAPI) async throws -> [Int: Int64] {
+        var f = filter
+        f.sort = [SortCrit(field: "updated_on", dir: "desc")]
+        var found: [Int: Int64] = [:]
+        var offset = 0
+        while true {
+            let page = try await api.issues(f, offset: offset, limit: 100)
+            for i in page.issues {
+                guard let u = redmineMillis(i.updatedOn) else { continue }
+                if u <= readState.baseline { return found }
+                if readState.isUnread(i.id, u) { found[i.id] = u }
+                if found.count >= 100 { return found }
+            }
+            offset += page.issues.count
+            if page.issues.isEmpty || offset >= page.totalCount { return found }
+        }
     }
 
     /// Universal link https://сервер/issues/123[#note-5 | #change-ID] → задача; журнал найдёт journalForFragment.

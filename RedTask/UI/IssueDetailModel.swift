@@ -159,6 +159,7 @@ final class IssueDetailModel {
             let times = await t
             if !perms.known, let p = await app.refs?.cachedPermissions(fresh.project.id) { perms = IssuePerms(known: true, set: p) }
             issue = fresh
+            app.viewed(fresh) // просмотр — только свежая версия с сервера (spec 19.1)
             timeEntries = times
             applyPage(app)
             error = nil

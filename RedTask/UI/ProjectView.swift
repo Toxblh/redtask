@@ -540,6 +540,7 @@ private struct AssigneeAvatars: View {
 
 /// Карточка на доске — компактная: номер и трекер, тема, приоритет, исполнитель.
 private struct BoardCard: View {
+    @Environment(AppModel.self) private var app
     let issue: Issue
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -547,6 +548,7 @@ private struct BoardCard: View {
             HStack(spacing: 5) {
                 Circle().fill(statusTint(issue.status)).frame(width: 7, height: 7)
                 Text(verbatim: "\(issue.tracker.name) #\(issue.id)").font(.caption).foregroundStyle(.secondary)
+                if app.isUnread(issue) { UnreadDot() }
             }
             Text(issue.subject).font(.subheadline.weight(.medium)).lineLimit(3)
                 .strikethrough(issue.status.isClosed, color: .secondary)

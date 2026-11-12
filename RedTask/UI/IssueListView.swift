@@ -368,6 +368,8 @@ struct IssueRow: View {
             head {
                 StatusPill(status: issue.status, compact: true)
                 HStack(spacing: 4) {
+                    // непрочитанная (spec 19.2) — точка акцента у номера; прочитали — пропадает везде сразу
+                    if app.isUnread(issue) { UnreadDot() }
                     Text(verbatim: "\(issue.tracker.name) #\(issue.id)").lineLimit(1)
                     if app.isFavorite(issue.id) {
                         Image(systemName: "star.fill").foregroundStyle(.yellow).accessibilityLabel("Favorite")
@@ -426,6 +428,13 @@ struct IssueRow: View {
         .opacity(closed ? 0.6 : 1)
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Точка акцента у номера непрочитанной задачи (spec 19.2).
+struct UnreadDot: View {
+    var body: some View {
+        Circle().fill(.tint).frame(width: 7, height: 7).accessibilityLabel(Text("New"))
     }
 }
 

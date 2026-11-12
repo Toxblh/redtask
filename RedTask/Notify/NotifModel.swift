@@ -136,7 +136,7 @@ struct NotifIssueGroup: Identifiable, Sendable {
         return entries.filter { e in e.avatarUserId.map { seen.insert($0).inserted } ?? false }
     }
     var journalId: Int? { entries.lazy.compactMap(\.journalId).first }
-    func unread(_ keys: Set<String>) -> Bool { entries.contains { keys.contains($0.key) } }
+    func unread(_ read: ReadState) -> Bool { entries.contains { read.isUnread($0.issueId, $0.at) } }
 }
 
 struct NotifDay: Identifiable, Sendable {
@@ -188,6 +188,7 @@ actor NotifStore {
     private var dir: URL { Files.dir(Files.support, "notifications") }
     private var file: URL { dir.appendingPathComponent("history.json") }
     private var stateFile: URL { dir.appendingPathComponent("poll-state.json") }
+    /// Прежний набор «непрочитанных» (до spec 19) — только стирается.
     private var unreadFile: URL { dir.appendingPathComponent("unread.json") }
     private var ownerFile: URL { dir.appendingPathComponent("owner") }
     private var flagFile: URL { dir.appendingPathComponent("backfilled.v1") }
@@ -195,14 +196,6 @@ actor NotifStore {
     func load() -> [NotifEntry] { Files.read([NotifEntry].self, file) ?? [] }
     func loadState() -> PollState? { Files.read(PollState.self, stateFile) }
     func saveState(_ s: PollState) throws { try Files.write(s, stateFile) }
-    func unread() -> Set<String> { Files.read(Set<String>.self, unreadFile) ?? [] }
-
-    /// Открытие колокольчика: отдаёт непрочитанное и помечает всё прочитанным.
-    func takeUnread() -> Set<String> {
-        let u = unread()
-        try? FileManager.default.removeItem(at: unreadFile)
-        return u
-    }
 
     /// Вход: если учётка другая — история прежней стирается (номер задачи с чужого сервера глушил бы событие).
     @discardableResult
@@ -221,13 +214,12 @@ actor NotifStore {
      Дописывает записи и возвращает только действительно новые: повтор опроса после сбоя и бэкфилл
      не дублируют ни историю, ни уведомления. Сбой записи пробрасывается — вызывающий повторит.
      */
-    func appendAll(_ entries: [NotifEntry], unread markUnread: Bool = true) throws -> [NotifEntry] {
+    func appendAll(_ entries: [NotifEntry]) throws -> [NotifEntry] {
         let old = load()
         var known = Set(old.map(\.key))
         let fresh = entries.filter { known.insert($0.key).inserted }
         if fresh.isEmpty { return [] }
         let all = Array((old + fresh).sorted { $0.at > $1.at }.prefix(Self.cap))
-        if markUnread { try Files.write(unread().union(fresh.map(\.key)), unreadFile) }
         try Files.write(all, file)
         return fresh
     }
@@ -287,3 +279,36 @@ func notificationImage(notes: String?, details: [JournalDetail], attachments: [A
     }
     return nil
 }
+
+/**
+ Прочитано и непрочитано (spec 19.1): рубеж baseline (мс) и просмотры seen — id задачи → updated_on её версии,
+ пришедшей с сервера при открытии. Непрочитана: updated_on > baseline и > seen[id] (нет записи — только первое).
+ */
+struct ReadState: Codable, Sendable, Equatable {
+    var baseline: Int64 = 0
+    var seen: [Int: Int64] = [:]
+    static let cap = 5000
+
+    func isUnread(_ issueId: Int, _ updated: Int64) -> Bool {
+        updated > baseline && seen[issueId].map { updated > $0 } ?? true
+    }
+
+    /// «Пометить всё прочитанным» и первый вход.
+    mutating func markAll(now: Int64) {
+        baseline = now
+        seen = [:]
+    }
+
+    /// Просмотр свежей версии задачи; записи не новее рубежа не нужны, больше 5000 — старейшие вон.
+    mutating func view(_ issueId: Int, _ updated: Int64) {
+        seen[issueId] = updated
+        seen = seen.filter { $0.value > baseline }
+        if seen.count > Self.cap {
+            // ponytail: «старейший просмотр» — по updated_on версии, времени открытия не храним
+            for (k, _) in seen.sorted(by: { $0.value < $1.value }).prefix(seen.count - Self.cap) { seen[k] = nil }
+        }
+    }
+}
+
+/// updated_on Redmine → мс эпохи.
+func redmineMillis(_ s: String?) -> Int64? { parseRedmineDate(s).map { Int64($0.timeIntervalSince1970 * 1000) } }

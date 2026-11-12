@@ -605,8 +605,20 @@ struct FavoriteQueriesSection: View {
         Section("Queries") {
             ForEach(app.settings.favoriteQueries) { saved in
                 let run = app.resolved(saved)
+                let unread = app.queryBadge(run.id)
                 Button { page.wrappedValue = .query(run) } label: {
-                    Label { Text(run.name).lineLimit(2) } icon: { Image(systemName: "line.3.horizontal.decrease.circle") }
+                    HStack {
+                        Label { Text(run.name).lineLimit(2) } icon: { Image(systemName: "line.3.horizontal.decrease.circle") }
+                        Spacer(minLength: 4)
+                        // непрочитанные задачи запроса (spec 19.3)
+                        if unread > 0 {
+                            Text(verbatim: unread > 99 ? "99+" : "\(unread)")
+                                .font(.caption.weight(.semibold)).monospacedDigit().foregroundStyle(.white)
+                                .padding(.horizontal, 7).padding(.vertical, 2)
+                                .background(Color.accentColor, in: Capsule())
+                                .accessibilityLabel(Text("\(unread) unread"))
+                        }
+                    }
                 }
                 .foregroundStyle(.primary)
                 .swipeActions {
@@ -617,5 +629,7 @@ struct FavoriteQueriesSection: View {
             }
             .onMove { app.settings.favoriteQueries.move(fromOffsets: $0, toOffset: $1) }
         }
+        // показ вкладки — пересчёт (не чаще раза в минуту на запрос)
+        .task(id: app.settings.favoriteQueries.map(\.id)) { await app.refreshQueryBadges() }
     }
 }

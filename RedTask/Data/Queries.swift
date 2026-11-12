@@ -183,7 +183,9 @@ struct IssueFilter: Codable, Sendable, Hashable {
     var queryId: Int?
 
     func params(limit: Int, offset: Int) -> [(String, String)] {
-        var p = queryId.map { [("query_id", String($0))] } ?? filterParams(filters, sort: sort)
+        // у сохранённого запроса сортировку можно перекрыть (бейдж непрочитанных, spec 19.3)
+        let order: [(String, String)] = sort.isEmpty ? [] : [("sort", sort.map { "\($0.field):\($0.dir)" }.joined(separator: ","))]
+        var p = queryId.map { [("query_id", String($0))] + order } ?? filterParams(filters, sort: sort)
         if let projectId { p.append(("project_id", String(projectId))) }
         return p + [("limit", String(limit)), ("offset", String(offset))]
     }

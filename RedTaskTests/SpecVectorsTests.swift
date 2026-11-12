@@ -268,6 +268,19 @@ struct SpecVectorsTests {
         }
     }
 
+    @Test func readStateCases() {
+        let s = section("read_state")
+        var r = ReadState(baseline: (s["baseline"] as! NSNumber).int64Value,
+                          seen: Dictionary(uniqueKeysWithValues: (s["seen"] as! [String: NSNumber]).map { (Int($0.key)!, $0.value.int64Value) }))
+        for c in s["cases"] as! [[String: Any]] {
+            #expect(r.isUnread(c["id"] as! Int, (c["updated_on"] as! NSNumber).int64Value) == c["unread"] as! Bool, "\(c["_"]!)")
+        }
+        let m = s["mark_all"] as! [String: Any]
+        r.markAll(now: (m["now"] as! NSNumber).int64Value)
+        #expect(r.baseline == (m["expected_baseline"] as! NSNumber).int64Value)
+        #expect(r.seen.isEmpty && (m["expected_seen"] as! [String: Any]).isEmpty)
+    }
+
     @Test func querySavedCases() {
         for c in section("query_saved")["cases"] as! [[Any]] {
             #expect(savedQueryId(c[0] as! String) == c[1] as? Int, "\(c[0])")
