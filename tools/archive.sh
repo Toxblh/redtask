@@ -8,7 +8,7 @@ rsync -a --delete --exclude .git --exclude build --exclude '*.xcodeproj' --exclu
 ssh $MAC "zsh -lc '
   set -e
   read -r PW; security unlock-keychain -p \"\$PW\" ~/Library/Keychains/login.keychain-db
-  cd ~/git/redtask && xcodegen generate -q >/dev/null && rm -rf build/RedTask.xcarchive build/export && mkdir -p build
+  cd ~/git/redtask && xcodegen generate -q >/dev/null && rm -rf build/RedTask.xcarchive build/export build/ExportOptions.plist && mkdir -p build
   xcodebuild -project RedTask.xcodeproj -scheme RedTask -configuration Release -destination generic/platform=iOS \
     -archivePath build/RedTask.xcarchive -allowProvisioningUpdates archive > build/archive.log 2>&1 \
     || { grep -E \"error|warning: .*icon\" build/archive.log | head -20; exit 1; }
@@ -18,5 +18,5 @@ ssh $MAC "zsh -lc '
   xcodebuild -exportArchive -archivePath build/RedTask.xcarchive -exportPath build/export \
     -exportOptionsPlist build/ExportOptions.plist -allowProvisioningUpdates > build/export.log 2>&1 \
     || { grep -iE \"error\" build/export.log | head -20; exit 1; }
-  ls -l build/export
+  ls -l build/export 2>/dev/null || true
 '" < ~/.redtask-keychain
