@@ -368,6 +368,16 @@
         }
       }
     },
+    "Add watcher" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить наблюдателя"
+          }
+        }
+      }
+    },
     "Add to Favorites" : {
       "localizations" : {
         "ru" : {
@@ -3315,6 +3325,16 @@
         }
       }
     },
+    "The server doesn’t allow changing watchers from the app" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сервер не разрешает менять наблюдателей из приложения"
+          }
+        }
+      }
+    },
     "The server doesn’t allow editing comments: %@" : {
       "localizations" : {
         "ru" : {
@@ -3571,6 +3591,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Наблюдатели"
+          }
+        }
+      }
+    },
+    "Watchers %lld" : {
+      "localizations" : {
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Наблюдатели %lld"
           }
         }
       }

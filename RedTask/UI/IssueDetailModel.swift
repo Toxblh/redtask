@@ -108,6 +108,10 @@ final class IssueDetailModel {
     private(set) var related: [Int: Issue] = [:]
     /// Комментарии, править которые сервер отказал.
     private(set) var notesRefused = Set<Int>()
+    /// Сервер отказал менять наблюдателей этой задачи (403).
+    private(set) var watchersRefused = false
+    /// Короткое сообщение внизу экрана, гаснет само.
+    var toast: String?
 
     // черновик комментария
     var draft = ""
@@ -128,6 +132,8 @@ final class IssueDetailModel {
     func load(_ app: AppModel) async {
         guard let api = app.api else { return }
         if issue == nil, let snap = await IssueCache.load(app.account, issueId) {
+            // права из кэша — в том же кадре, что и задача: действия не появляются с задержкой (spec 16.2)
+            if let p = await app.refs?.cachedPermissions(snap.issue.project.id) { perms = IssuePerms(known: true, set: p) }
             issue = snap.issue
             timeEntries = snap.timeEntries
             customTables = snap.customTables ?? []
@@ -151,6 +157,7 @@ final class IssueDetailModel {
             async let t: [TimeEntry] = (try? await api.timeEntries(issueId: issueId)) ?? []
             let fresh = try await i
             let times = await t
+            if !perms.known, let p = await app.refs?.cachedPermissions(fresh.project.id) { perms = IssuePerms(known: true, set: p) }
             issue = fresh
             timeEntries = times
             applyPage(app)
@@ -188,8 +195,11 @@ final class IssueDetailModel {
         let relIds = i.children.map(\.id) + i.relations.map { $0.issueId == i.id ? $0.issueToId : $0.issueId } + (i.parent.map { [$0.id] } ?? [])
         async let rel = try? api.issuesByIds(relIds)
 
-        let perms = await p
-        self.perms = IssuePerms(known: true, set: perms)
+        // сбой сети не затирает права из кэша; задачу перенесли — кэш нового проекта (spec 16.2)
+        var fresh = await p
+        if fresh == nil { fresh = await refs.cachedPermissions(i.project.id) }
+        let perms = IssuePerms(known: true, set: fresh)
+        if perms != self.perms { self.perms = perms }
         var n = names
         if let s = await st {
             n.statuses = Dictionary(s.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
@@ -365,6 +375,28 @@ final class IssueDetailModel {
 
     var watching: Bool { issue?.watchers.contains { $0.id == AppModel.shared.settings.userId } ?? false }
 
+    /// «+» у наблюдателей (spec 16.1): право есть или неизвестно, и сервер по этой задаче ещё не отказал.
+    func canAddWatchers(_ app: AppModel) -> Bool {
+        perms.has("add_issue_watchers") && !watchersRefused && !(app.api?.watchersForbidden(issueId) ?? false)
+    }
+
+    /// Добавить наблюдателя (spec 16.1). 403 — «+» прячем, тост; сайт не открываем: человек не просил.
+    func addWatcher(_ userId: Int, _ app: AppModel) async {
+        guard let api = app.api, !busy else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            try await api.addWatcher(issueId, userId: userId)
+            busy = false
+            await load(app)
+        } catch let e as RedmineError where e.code == 403 {
+            watchersRefused = true
+            toast = String(localized: "The server doesn’t allow changing watchers from the app")
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+
     /// Наблюдение: на многих серверах REST только для админа — тогда открываем веб-версию.
     func toggleWatch(_ app: AppModel) async -> Bool {
         let me = app.settings.userId, on = watching
@@ -378,6 +410,7 @@ final class IssueDetailModel {
             await load(app)
             return true
         } catch let e as RedmineError where e.code == 403 || e.code == 401 {
+            watchersRefused = api.watchersForbidden(issueId)
             return false
         } catch {
             actionError = error.localizedDescription

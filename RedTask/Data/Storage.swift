@@ -371,6 +371,25 @@ actor RefData {
         return all
     }
 
+    /// Права из кэша любого возраста, без сети — в тот же кадр, что и задача из кэша (spec 16.2). nil — кэша нет.
+    func cachedPermissions(_ projectId: Int) -> Set<String>? {
+        guard let my: MyRoles = stale("my-roles") else { return nil }
+        if my.admin { return ["*"] }
+        guard let ids = my.roles[projectId], !ids.isEmpty else { return nil }
+        var all = Set<String>()
+        for id in ids {
+            guard let p: [String] = stale("role-\(id)") else { return nil }
+            all.formUnion(p)
+        }
+        return all
+    }
+
+    /// Память → диск, не глядя на TTL.
+    private func stale<T: Codable & Sendable>(_ name: String) -> T? {
+        if let v = mem[name]?.value as? T { return v }
+        return Files.read(Stamped<T>.self, dir.appendingPathComponent(name + ".json"))?.value
+    }
+
     /// Человек по логину (упоминание): поиск People по началу — берём точное совпадение. Только память.
     func personByLogin(_ login: String) async -> Person? {
         let l = login.trimmingCharacters(in: .whitespaces).lowercased()

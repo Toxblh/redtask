@@ -17,7 +17,7 @@ enum ActivityTab: String, CaseIterable, Identifiable {
 }
 
 enum DetailSheet: Identifiable {
-    case comment, time(TimeEntry?), relation, edit, person(Int), upload([PickedFile])
+    case comment, time(TimeEntry?), relation, edit, person(Int), upload([PickedFile]), watcher
     /// Выделение текста комментария (journal) или описания (nil) для частичной цитаты.
     case select(String, Journal?)
     /// Строка листа согласования (spec 10) и страница сайта с сессией (правка строки, «Добавить»).
@@ -33,6 +33,7 @@ enum DetailSheet: Identifiable {
         case .edit: "edit"
         case .person(let id): "person-\(id)"
         case .upload: "upload"
+        case .watcher: "watcher"
         }
     }
 }
@@ -55,6 +56,8 @@ struct IssueDetailView: View {
     @State private var confirmDelete: ConfirmDelete?
     @State private var highlighted: Int?
     @State private var webFallback: URL?
+    /// Выбор наблюдателя (spec 16.1) — тот же поиск людей, что у «Упомянуть».
+    @State private var watcherSearch = MentionSearch()
 
     init(issueId: Int, fragment: String? = nil, newSubtask: @escaping (Issue) -> Void = { _ in }) {
         self.issueId = issueId
@@ -142,6 +145,15 @@ struct IssueDetailView: View {
         }
         .errorAlert($model.actionError)
         .sheet(item: $webFallback) { url in SafariView(url: url).ignoresSafeArea().environment(app) }
+        .overlay(alignment: .bottom) {
+            if let t = model.toast {
+                Text(t).font(.subheadline).padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(.horizontal, 16).padding(.bottom, 24)
+                    .transition(.opacity)
+                    .task(id: t) { try? await Task.sleep(for: .seconds(3)); withAnimation { model.toast = nil } }
+            }
+        }
     }
 
     /// Фрагмент «note-N» / «change-ID» → журнал (journalForFragment), прокрутка и подсветка.
@@ -183,13 +195,7 @@ struct IssueDetailView: View {
             subtasks(issue)
             relations(issue)
             attachments(issue)
-            if !issue.watchers.isEmpty {
-                Section("Watchers") {
-                    ForEach(issue.watchers) { w in
-                        Button { sheet = .person(w.id) } label: { PersonLine(person: w) }.buttonStyle(.plain)
-                    }
-                }.id("watchers")
-            }
+            watchers(issue)
             Section {
                 activityRows(issue, me: me, ctx: ctx)
             } header: {
@@ -491,6 +497,28 @@ struct IssueDetailView: View {
         }
     }
 
+    /// «Наблюдатели N» и «+» справа в заголовке (spec 16.1); без права и без наблюдателей раздела нет.
+    @ViewBuilder
+    private func watchers(_ issue: Issue) -> some View {
+        let canAdd = model.canAddWatchers(app)
+        if !issue.watchers.isEmpty || canAdd {
+            Section {
+                ForEach(issue.watchers) { w in
+                    Button { sheet = .person(w.id) } label: { PersonLine(person: w) }.buttonStyle(.plain)
+                }
+            } header: {
+                HStack {
+                    if issue.watchers.isEmpty { Text("Watchers") } else { Text("Watchers \(issue.watchers.count)") }
+                    Spacer()
+                    if canAdd {
+                        Button { sheet = .watcher } label: { Image(systemName: "plus") }
+                            .accessibilityLabel(Text("Add watcher"))
+                    }
+                }
+            }.id("watchers")
+        }
+    }
+
     @ViewBuilder
     private func attachments(_ issue: Issue) -> some View {
         let me = app.settings.userId
@@ -711,6 +739,9 @@ struct IssueDetailView: View {
         case .edit: if let i = model.issue { EditIssueView(issue: i, perms: model.perms) { Task { app.listEpoch += 1; await model.load(app) } } }
         case .person(let id): PersonCard(userId: id)
         case .upload(let files): UploadSheet(model: model, files: files)
+        case .watcher:
+            PeoplePicker(search: watcherSearch, title: "Add watcher") { p in Task { await model.addWatcher(p.id, app) } }
+                .task { if let i = model.issue { await watcherSearch.resolve(issueParticipants(i), app: app) } }
         case .select(let text, let j):
             SelectTextSheet(text: text, canQuote: model.perms.has("add_issue_notes")) { sel in
                 if let j { model.reply(to: j, text: sel) } else { model.quoteDescription(sel) }

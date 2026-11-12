@@ -216,6 +216,8 @@ struct PeoplePicker: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     let search: MentionSearch
+    /// Тот же выбор и для «Добавить наблюдателя» (spec 16.1).
+    var title: LocalizedStringKey = "Mention someone"
     let onPick: (MentionPerson) -> Void
     @State private var query = ""
 
@@ -232,7 +234,7 @@ struct PeoplePicker: View {
             .overlay {
                 if list.isEmpty && !query.isEmpty { ContentUnavailableView.search(text: query) }
             }
-            .navigationTitle("Mention someone")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("Name or login"))
             .textInputAutocapitalization(.never)
