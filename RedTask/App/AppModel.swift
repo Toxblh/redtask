@@ -36,6 +36,10 @@ final class AppModel {
     /// Вход через сайт ради веб-сессии (звезда пишется только ею).
     var showWebLogin = false
     private var pendingFavorite: (id: Int, on: Bool)?
+    /// Запросы, которые сейчас уходят на сервер (spec 17.3).
+    private(set) var pushingQueries = Set<String>()
+    /// Повтор «на сервер» без кнопки при открытии списка — не чаще раза в сессию на запрос.
+    private var queriesRetried = Set<String>()
     private var favoriteWrites = 0
     private var migrating = false
 
@@ -164,6 +168,7 @@ final class AppModel {
         Task { await ImageStore.shared.clear(); await LabelStore.shared.clear() }
         unreadCount = 0
         pendingFavorite = nil
+        queriesRetried = []
         if isDemo {
             // настройки демо на диск не попадали — возвращаем сохранённые (вышедшие) настройки
             isDemo = false
@@ -177,6 +182,9 @@ final class AppModel {
         s.favorites = []
         s.favoritesPending = []
         s.recentIssues = []
+        s.localQueries = []
+        s.recentFilters = []
+        s.favoriteQueries = []
         s.lastCheck = nil
         settings = s
     }
@@ -212,13 +220,20 @@ final class AppModel {
 
     private func writeFavorite(_ id: Int, _ on: Bool) async throws {
         if isDemo { return DemoServer.setFavorite(id, on) }
-        guard let api, let host = api.baseURL.host else { return }
-        guard let cookie = await Self.cookieHeader(host: host) else { throw WebSessionRequired() }
+        try await webSession { api, cookie, agent in ((), try await api.setFavorite(id, on, cookie: cookie, userAgent: agent)) }
+    }
+
+    /// Действие веб-сессией сайта (куки WebView и его UA); в демо — выдуманная сессия, отвечает DemoServer.
+    private func webSession<T>(_ op: (RedmineAPI, String, String) async throws -> (T, [HTTPCookie])) async throws -> T {
+        guard let api, let host = api.baseURL.host else { throw WebSessionRequired() }
         let agent = UserDefaults.standard.string(forKey: "wafAgent") ?? RedmineAPI.userAgent
-        let fresh = try await api.setFavorite(id, on, cookie: cookie, userAgent: agent)
+        if isDemo { return try await op(api, "_redmine_session=demo", agent).0 }
+        guard let cookie = await Self.cookieHeader(host: host) else { throw WebSessionRequired() }
+        let (value, fresh) = try await op(api, cookie, agent)
         // обновлённая сессия — обратно в WebView, иначе она истечёт по таймауту неактивности
         for c in fresh { await WKWebsiteDataStore.default().httpCookieStore.setCookie(c) }
         if !fresh.isEmpty { await loadBrowserCookies(agent: agent) }
+        return value
     }
 
     /// Набор с сервера (вход, возврат в приложение, список «Избранное»); затем — перенос старого локального.
@@ -266,10 +281,81 @@ final class AppModel {
             pendingFavorite = nil
             if isFavorite(p.id) != p.on { toggleFavorite(p.id) }
         }
+        // запросы «Только на устройстве» — снова на сервер (spec 17.3)
+        for q in settings.localQueries where !q.onServer && !q.detached { Task { await pushQuery(q.localId) } }
         await refreshFavorites()
     }
 
     func cancelPendingFavorite() { pendingFavorite = nil }
+
+    // MARK: - Сохранённые запросы (spec 17)
+
+    /// Шаг 1 — у себя, сразу; шаг 2 — на сервер фоном.
+    func saveQuery(_ q: LocalQuery) {
+        if let i = settings.localQueries.firstIndex(where: { $0.localId == q.localId }) { settings.localQueries[i] = q }
+        else { settings.localQueries.insert(q, at: 0) }
+        Task { await pushQuery(q.localId) }
+    }
+
+    /// Шаг 2 — веб-формой сайта. Не вышло — «Только на устройстве» с причиной.
+    /// interactive — нажали «Сохранить на сервере»: нет веб-сессии — сразу вход через сайт (после него повтор сам).
+    func pushQuery(_ localId: String, interactive: Bool = false) async {
+        guard let q = settings.localQueries.first(where: { $0.localId == localId }), !pushingQueries.contains(localId) else { return }
+        pushingQueries.insert(localId)
+        defer { pushingQueries.remove(localId) }
+        var serverId = q.serverId
+        var reason: String?
+        do {
+            let id: Int = try await webSession { api, cookie, agent in try await api.saveQuery(q, cookie: cookie, userAgent: agent) }
+            serverId = id
+        }
+        catch {
+            reason = Self.queryError(error)
+            if interactive && error is WebSessionRequired { showWebLogin = true }
+        }
+        guard let i = settings.localQueries.firstIndex(where: { $0.localId == localId }) else { return }
+        settings.localQueries[i].serverId = serverId
+        settings.localQueries[i].error = reason
+        if reason == nil { settings.localQueries[i].detached = false }
+    }
+
+    private static func queryError(_ e: Error) -> String {
+        if e is WebSessionRequired { return String(localized: "Sign in on the website") }
+        if let r = e as? RedmineError, [403, 404, 422].contains(r.code) { return r.message }
+        return String(localized: "No connection")
+    }
+
+    /// Удаление: есть server_id — сначала на сервере. false — сервер не удалил (спросить «Удалить только на устройстве?»).
+    func deleteQuery(_ q: LocalQuery, localOnly: Bool = false) async -> Bool {
+        if let sid = q.serverId, !localOnly {
+            do { try await webSession { api, cookie, agent in ((), try await api.deleteQuery(sid, projectId: q.projectId, cookie: cookie, userAgent: agent)) } }
+            catch { return false }
+        }
+        settings.localQueries.removeAll { $0.localId == q.localId }
+        settings.favoriteQueries.removeAll { $0.id == q.run.id }
+        return true
+    }
+
+    /// Сверка с queries.json (spec 17.4) и повтор «на сервер» без кнопки — раз в сессию на запрос.
+    func syncQueries(_ server: [ServerQuery]) {
+        let synced = syncLocalQueries(settings.localQueries, server: server, deletedReason: String(localized: "Deleted on the website"))
+        if synced != settings.localQueries { settings.localQueries = synced }
+        for q in synced where !q.onServer && !q.detached && queriesRetried.insert(q.localId).inserted {
+            Task { await pushQuery(q.localId) }
+        }
+    }
+
+    func addRecentFilter(_ f: IssueFilter) { settings.recentFilters = recentFilters(settings.recentFilters, f) }
+
+    func isFavoriteQuery(_ id: String) -> Bool { settings.favoriteQueries.contains { $0.id == id } }
+    func toggleFavoriteQuery(_ r: QueryRun) {
+        if isFavoriteQuery(r.id) { settings.favoriteQueries.removeAll { $0.id == r.id } } else { settings.favoriteQueries.append(r) }
+    }
+
+    /// Избранный локальный запрос — с нынешними именем и условиями.
+    func resolved(_ r: QueryRun) -> QueryRun {
+        settings.localQueries.first { $0.run.id == r.id }?.run ?? r
+    }
 
     // MARK: - Избранные проекты (локально, на учётку)
 

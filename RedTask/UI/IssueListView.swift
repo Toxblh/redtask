@@ -137,6 +137,8 @@ final class IssueListModel {
 struct IssueListView: View {
     let kind: ListKind
     @Binding var selection: Int?
+    /// Колонка детали — для избранных запросов над задачами (spec 17.5).
+    var page: Binding<ProjectPage?>?
     @State private var models: [StatusFilter: IssueListModel]
     @State private var filter: StatusFilter = .open
     /// Сдвиг страниц пальцем, pt; 0 — покой.
@@ -144,9 +146,10 @@ struct IssueListView: View {
     @State private var query = ""
     @State private var openSwipe: Int?
 
-    init(kind: ListKind, selection: Binding<Int?>) {
+    init(kind: ListKind, selection: Binding<Int?>, page: Binding<ProjectPage?>? = nil) {
         self.kind = kind
         _selection = selection
+        self.page = page
         _models = State(initialValue: Dictionary(uniqueKeysWithValues: StatusFilter.allCases.map { ($0, IssueListModel(kind: kind, filter: $0)) }))
     }
 
@@ -176,7 +179,7 @@ struct IssueListView: View {
                 ZStack {
                     ForEach(Self.all) { f in
                         let d = CGFloat(Self.all.firstIndex(of: f)! - index)
-                        IssueListPage(model: models[f]!, query: query, active: f == filter, selection: $selection, openSwipe: $openSwipe)
+                        IssueListPage(model: models[f]!, query: query, active: f == filter, selection: $selection, page: page, openSwipe: $openSwipe)
                             .offset(x: d * w + drag)
                             .allowsHitTesting(d == 0)
                             .accessibilityHidden(d != 0)
@@ -232,6 +235,7 @@ private struct IssueListPage: View {
     let query: String
     let active: Bool
     @Binding var selection: Int?
+    let page: Binding<ProjectPage?>?
     @Binding var openSwipe: Int?
     @State private var actionError: String?
     /// Обновление жестом: у него свой системный индикатор (spec 12).
@@ -261,6 +265,9 @@ private struct IssueListPage: View {
                     }
                 }
             }
+            if let page, model.kind == .favorites, !app.settings.favoriteQueries.isEmpty {
+                FavoriteQueriesSection(page: page)
+            }
             Section {
                 ForEach(model.issues) { issue in
                     IssueRow(issue: issue, showProject: !isProject)
@@ -286,7 +293,8 @@ private struct IssueListPage: View {
             }
         }
         .overlay {
-            if model.issues.isEmpty {
+            // избранные запросы над задачами — заглушка их не закрывает
+            if model.issues.isEmpty && !(page != nil && model.kind == .favorites && !app.settings.favoriteQueries.isEmpty) {
                 if let e = model.error {
                     LoadErrorView(message: e) { Task { await model.load(app) } }
                 } else if model.loading || !model.loadedOnce {

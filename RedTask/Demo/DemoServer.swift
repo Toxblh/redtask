@@ -27,8 +27,10 @@ final class DemoServer: URLProtocol {
         let req = request
         let body = req.httpBody ?? req.httpBodyStream.map(Self.read) ?? Data()
         let (code, type, data) = Self.lock.withLock { Self.db.handle(req, body: body) }
-        let resp = HTTPURLResponse(url: req.url ?? Self.base, statusCode: code, httpVersion: "HTTP/1.1",
-                                   headerFields: ["Content-Type": type, "X-Request-Id": "demo"])!
+        var headers = ["Content-Type": type, "X-Request-Id": "demo"]
+        // ответ веб-формы: 302, адрес — в теле (redirect)
+        if code == 302 { headers["Location"] = String(decoding: data, as: UTF8.self) }
+        let resp = HTTPURLResponse(url: req.url ?? Self.base, statusCode: code, httpVersion: "HTTP/1.1", headerFields: headers)!
         client?.urlProtocol(self, didReceive: resp, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
@@ -53,6 +55,8 @@ final class DemoServer: URLProtocol {
 // MARK: - Данные и «сервер»
 
 private struct Upload { var filename: String; var type: String?; var data: Data }
+/// Сохранённый запрос (spec 17): поля веб-формы — условия и сортировка.
+private struct DemoQuery { var id: Int; var name: String; var isPublic: Bool; var projectId: Int?; var form: [(String, String)] }
 
 private struct DemoDB {
     static let meId = 1
@@ -73,6 +77,7 @@ private struct DemoDB {
     var favorites: Set<Int> = []
     var files: [Int: Upload] = [:]
     var uploads: [String: Upload] = [:]
+    var queries: [DemoQuery] = []
     var nextId = 2000
 
     mutating func newId() -> Int { nextId += 1; return nextId }
@@ -120,6 +125,14 @@ private struct DemoDB {
             }
             return id.map { ok(UserResponse(user: user($0))) } ?? notFound
         case ("GET", "roles"): return raw(["role": ["id": id ?? 0, "name": "Developer", "permissions": []]])
+        case ("GET", "roles.json"): return raw(["roles": [1, 3, 4, 5, 6].map { role(roleHolder[$0] ?? 1) }])
+        case ("GET", "queries.json"):
+            let list: [[String: Any]] = queries.map { ["id": $0.id, "name": $0.name, "is_public": $0.isPublic, "project_id": $0.projectId.map { $0 as Any } ?? NSNull()] }
+            return raw(["queries": list, "total_count": list.count, "offset": 0, "limit": 100])
+        case ("GET", "queries") where parts.count > 1 && parts[1] == "new": return queryFormPage
+        case ("POST", "queries"): return saveQuery(parts.count > 1 ? id : nil, projectKey: nil, form(body))
+        case ("POST", "projects") where parts.count == 3 && parts[2] == "queries": return saveQuery(nil, projectKey: parts[1], form(body))
+        case ("GET", "issues") where parts.count == 1: return catalogPage
         case ("GET", "issue_statuses.json"): return ok("issue_statuses", statuses)
         case ("GET", "trackers.json"): return ok("trackers", trackers)
         case ("GET", "enumerations"):
@@ -137,6 +150,8 @@ private struct DemoDB {
                 let ms: [[String: Any]] = people.map { ["id": $0.id, "user": ["id": $0.id, "name": $0.shortName], "roles": [role($0.id)]] }
                 return raw(["memberships": ms, "total_count": ms.count])
             case "files.json": return ok("files", projectFiles[pr.id] ?? [])
+            case "issues": return catalogPage
+            case "queries" where parts.count > 3 && parts[3] == "new": return queryFormPage
             case "wiki":
                 guard let pages = wiki[pr.id] else { return (403, "application/json", Data(#"{"errors":[]}"#.utf8)) }
                 let name = parts.count > 3 ? parts[3].replacingOccurrences(of: ".json", with: "") : ""
@@ -154,7 +169,17 @@ private struct DemoDB {
             case "": return ok(ProjectResponse(project: pr))
             default: return notFound
             }
-        case ("GET", "issues.json"): return list(p, q)
+        case ("GET", "issues.json"):
+            // сохранённый запрос: его условия и сортировка вместо параметров
+            if let qid = p("query_id").flatMap(Int.init) {
+                guard let sq = queries.first(where: { $0.id == qid }) else { return notFound }
+                var items = q.filter { ["project_id", "limit", "offset"].contains($0.name) } + [URLQueryItem(name: "set_filter", value: "1")]
+                items += sq.form.filter { !$0.0.hasPrefix("query[") }.map { URLQueryItem(name: $0.0, value: $0.1) }
+                let sc = sq.form.filter { $0.0.hasPrefix("query[sort_criteria]") }.map { $0.1 }
+                if sc.count >= 2 { items.append(URLQueryItem(name: "sort", value: "\(sc[0]):\(sc[1])")) }
+                return list({ n in items.first { $0.name == n }?.value }, items)
+            }
+            return list(p, q)
         case ("GET", "issues"):
             guard let id, let i = issues[id] else { return notFound }
             return ok(IssueResponse(issue: full(i)))
@@ -269,6 +294,73 @@ private struct DemoDB {
     func int(_ v: Any?) -> Int? { (v as? Int) ?? (v as? String).flatMap(Int.init) }
     func double(_ v: Any?) -> Double? { (v as? Double) ?? (v as? Int).map(Double.init) ?? (v as? String).flatMap(Double.init) }
 
+    // MARK: фильтры и запросы (spec 17)
+
+    /// Чья роль — для roles.json по id роли.
+    var roleHolder: [Int: Int] { [1: 2, 3: 1, 4: 4, 5: 5, 6: 6] }
+
+    /// Страница задач: каталог фильтров (availableFilters, operatorByType, operatorLabels) — порядок как задан.
+    var catalogPage: (Int, String, Data) {
+        func js(_ v: Any) -> String { String(decoding: (try? JSONSerialization.data(withJSONObject: v, options: .fragmentsAllowed)) ?? Data(), as: UTF8.self) }
+        let defs: [(String, [String: Any])] = [
+            ("status_id", ["type": "list_status", "name": t("Status", "Статус"), "remote": true]),
+            ("tracker_id", ["type": "list", "name": t("Tracker", "Трекер"), "values": trackers.map { [$0.name, String($0.id)] }]),
+            ("priority_id", ["type": "list", "name": t("Priority", "Приоритет"), "values": priorities.map { [$0.name, String($0.id)] }]),
+            ("assigned_to_id", ["type": "list_optional", "name": t("Assignee", "Назначена"), "remote": true]),
+            ("author_id", ["type": "list", "name": t("Author", "Автор"), "remote": true]),
+            ("subject", ["type": "text", "name": t("Subject", "Тема")]),
+            ("updated_on", ["type": "date_past", "name": t("Updated", "Обновлена")]),
+            ("created_on", ["type": "date_past", "name": t("Created", "Создана")]),
+        ]
+        let filters = "{" + defs.map { "\(js($0.0)):\(js($0.1))" }.joined(separator: ",") + "}"
+        let ops: [String: [String]] = ["list_status": ["o", "=", "!", "c", "*"], "list": ["=", "!"], "list_optional": ["=", "!", "!*", "*"],
+                                       "text": ["~", "!~", "!*", "*"], "date_past": [">t-", "t", "ld", "w", "lw", "m", "!*", "*"]]
+        let labels: [String: String] = [
+            "o": t("open", "открыта"), "c": t("closed", "закрыта"), "=": t("is", "соответствует"), "!": t("is not", "не соответствует"),
+            "*": t("any", "любой"), "!*": t("none", "отсутствует"), "~": t("contains", "содержит"), "!~": t("doesn’t contain", "не содержит"),
+            ">t-": t("less than days ago", "менее чем дней назад"), "t": t("today", "сегодня"), "ld": t("yesterday", "вчера"),
+            "w": t("this week", "на этой неделе"), "lw": t("last week", "на прошлой неделе"), "m": t("this month", "в этом месяце"),
+        ]
+        let html = "<html><body><script>\n//<![CDATA[\nvar availableFilters = \(filters);\nvar operatorLabels = \(js(labels));\nvar operatorByType = \(js(ops));\n//]]>\n</script></body></html>"
+        return (200, "text/html; charset=utf-8", Data(html.utf8))
+    }
+
+    /// Страница «новый запрос»: вход на сайте есть, токен формы — в meta.
+    var queryFormPage: (Int, String, Data) {
+        (200, "text/html; charset=utf-8", Data(#"<html><head><meta name="csrf-token" content="demo-token" /></head><body><div id="loggedas">demo</div></body></html>"#.utf8))
+    }
+
+    func form(_ body: Data) -> [(String, String)] {
+        var c = URLComponents()
+        c.percentEncodedQuery = String(decoding: body, as: UTF8.self)
+        return (c.queryItems ?? []).map { ($0.name, $0.value ?? "") }
+    }
+
+    func redirect(_ path: String) -> (Int, String, Data) { (302, "text/html; charset=utf-8", Data((Self.baseURL + path).utf8)) }
+
+    /// Веб-форма запроса: новый (id nil), _method=patch — правка, _method=delete — удаление. Успех — 302 на задачи с query_id.
+    mutating func saveQuery(_ id: Int?, projectKey: String?, _ f: [(String, String)]) -> (Int, String, Data) {
+        func v(_ k: String) -> String? { f.first { $0.0 == k }?.1 }
+        let old = id.flatMap { i in queries.firstIndex { $0.id == i } }
+        if id != nil && old == nil { return notFound }
+        if v("_method") == "delete" {
+            queries.removeAll { $0.id == id }
+            return redirect("/issues")
+        }
+        let name = (v("query[name]") ?? "").trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else {
+            let e = t("Name cannot be blank", "Название не может быть пустым")
+            return (200, "text/html; charset=utf-8", Data(#"<div id="errorExplanation"><ul><li>\#(e)</li></ul></div>"#.utf8))
+        }
+        let pr = projectKey.flatMap { k in projects.first { String($0.id) == k || $0.identifier == k } }
+        let scope = v("query_is_for_all") == "1" ? nil : (old.map { queries[$0].projectId } ?? pr?.id)
+        let crit = f.filter { $0.0 == "f[]" || $0.0.hasPrefix("op[") || $0.0.hasPrefix("v[") || $0.0.hasPrefix("query[sort_criteria]") }
+        let q = DemoQuery(id: id ?? newId(), name: name, isPublic: v("query[visibility]") != "0", projectId: scope, form: crit)
+        if let old { queries[old] = q } else { queries.append(q) }
+        let key = projects.first { $0.id == scope }?.identifier
+        return redirect(key.map { "/projects/\($0)/issues?query_id=\(q.id)" } ?? "/issues?query_id=\(q.id)")
+    }
+
     // MARK: задачи
 
     /// Задача с include: подзадачи, связи, разрешённые статусы.
@@ -293,6 +385,17 @@ private struct DemoDB {
         let fields = q.filter { $0.name == "f[]" }.compactMap(\.value)
         func op(_ f: String) -> String { p("op[\(f)]") ?? "" }
         func val(_ f: String) -> String { p("v[\(f)][]") ?? "" }
+        func vals(_ f: String) -> [String] { q.filter { $0.name == "v[\(f)][]" }.compactMap(\.value) }
+        func idOf(_ i: Issue, _ f: String) -> Int? {
+            switch f {
+            case "tracker_id": i.tracker.id
+            case "priority_id": i.priority.id
+            case "status_id": i.status.id
+            case "assigned_to_id": i.assignedTo?.id
+            case "author_id": i.author.id
+            default: i.fixedVersion?.id
+            }
+        }
         // статус: короткая форма или фильтр
         let st = fields.contains("status_id") ? ["o": "open", "c": "closed"][op("status_id")] ?? "*" : (p("status_id") ?? "open")
         if st == "open" { all = all.filter { !$0.status.isClosed } } else if st == "closed" { all = all.filter { $0.status.isClosed } }
@@ -313,19 +416,31 @@ private struct DemoDB {
             case "favourite_state": all = all.filter { favorites.contains($0.id) }
             case "subject": all = all.filter { $0.subject.localizedCaseInsensitiveContains(val(f)) }
             case "notes": all = all.filter { $0.journals.contains { ($0.notes ?? "").localizedCaseInsensitiveContains(val(f)) } }
+            case "tracker_id", "priority_id", "status_id", "assigned_to_id", "author_id", "fixed_version_id":
+                let ids = Set(vals(f).compactMap { $0 == "me" ? Self.meId : Int($0) })
+                switch op(f) {
+                case "=": all = all.filter { idOf($0, f).map(ids.contains) ?? false }
+                case "!": all = all.filter { !(idOf($0, f).map(ids.contains) ?? false) }
+                case "!*": all = all.filter { idOf($0, f) == nil }
+                case "*" where f != "status_id": all = all.filter { idOf($0, f) != nil }
+                default: break
+                }
             case "updated_on", "created_on":
-                guard let d = parseRedmineDate(val(f)) else { continue }
+                let days = op(f) == ">t-" ? Int(val(f)) : nil
+                guard let d = days.map({ Date().addingTimeInterval(-Double($0) * 86400) }) ?? parseRedmineDate(val(f)) else { continue }
                 all = all.filter { (parseRedmineDate(f == "updated_on" ? $0.updatedOn : $0.createdOn) ?? .distantPast) >= d }
             default: break // project_id=mine — участник всех проектов
             }
         }
-        let sort = (p("sort") ?? "updated_on:desc").split(separator: ":")
+        // первый критерий из «поле:dir,поле:dir»
+        let sort = (p("sort") ?? "updated_on:desc").split(separator: ",").first?.split(separator: ":") ?? []
         let desc = sort.count > 1 && sort[1] == "desc"
         all.sort { a, b in
             let r: Bool
             switch sort.first ?? "" {
             case "id": r = a.id < b.id
             case "created_on": r = a.createdOn < b.createdOn
+            case "priority": r = a.priority.id < b.priority.id
             default: r = a.updatedOn < b.updatedOn
             }
             return desc ? !r && a.id != b.id : r
@@ -548,6 +663,16 @@ private extension DemoDB {
         add(1208, 2, 1, 2, 3, 5, 3, t("Search results ignore diacritics", "Поиск не находит слова с «ё»"), done: 40, upd: 900, cre: 8)
         add(1205, 3, 3, 1, 1, me, 7, t("Clean up old Docker images", "Почистить старые Docker-образы"), done: 0, upd: 2400, cre: 10)
         favorites = [1240, 1238, 1242]
+        queries = [
+            DemoQuery(id: 51, name: t("Open bugs", "Открытые ошибки"), isPublic: true, projectId: 1,
+                      form: [("f[]", "status_id"), ("op[status_id]", "o"), ("f[]", "tracker_id"), ("op[tracker_id]", "="), ("v[tracker_id][]", "1")]),
+            DemoQuery(id: 52, name: t("Urgent and above", "Срочные и выше"), isPublic: true, projectId: nil,
+                      form: [("f[]", "status_id"), ("op[status_id]", "o"), ("f[]", "priority_id"), ("op[priority_id]", "="),
+                             ("v[priority_id][]", "4"), ("v[priority_id][]", "5")]),
+            DemoQuery(id: 53, name: t("Reported by me", "Созданные мной"), isPublic: false, projectId: nil,
+                      form: [("f[]", "author_id"), ("op[author_id]", "="), ("v[author_id][]", "me"),
+                             ("query[sort_criteria][0][]", "priority"), ("query[sort_criteria][0][]", "desc")]),
+        ]
 
         let crash = crashDescription, offline = offlineDescription
         issues[1240]?.description = crash

@@ -3,6 +3,8 @@ import SwiftUI
 /// Проекты (кэш на неделю) → задачи проекта. Внутренний стек живёт в колонке списка.
 struct ProjectsView: View {
     @Environment(AppModel.self) private var app
+    /// Колонка детали — задачи запроса с экрана «Все запросы» (spec 17.4).
+    @Binding var page: ProjectPage?
     @State private var projects: [Project] = []
     @State private var error: String?
     @State private var loading = false
@@ -19,6 +21,15 @@ struct ProjectsView: View {
             List {
                 // избранные — секцией сверху (только при пустом фильтре), общий список не меняется
                 let pinned = query.isEmpty ? pinnedProjects(projects, pins: app.projectPins) : []
+                if query.isEmpty && !projects.isEmpty {
+                    NavigationLink {
+                        ProjectQueries(projectId: nil, page: $page)
+                            .navigationTitle("All queries")
+                            .navigationBarTitleDisplayMode(.inline)
+                    } label: {
+                        Label("All queries", systemImage: "line.3.horizontal.decrease.circle")
+                    }
+                }
                 if pinned.isEmpty {
                     ForEach(shown) { row($0) }
                 } else {

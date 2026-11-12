@@ -12,7 +12,7 @@ let package = Package(
             path: "RedTask",
             sources: [
                 "Data/Models.swift", "Data/Textile.swift", "Data/Activity.swift", "Data/RedmineAPI.swift",
-                "Data/Storage.swift", "Data/Thumbnails.swift", "Data/FormFields.swift", "Notify/NotifModel.swift",
+                "Data/Storage.swift", "Data/Thumbnails.swift", "Data/FormFields.swift", "Data/Queries.swift", "Notify/NotifModel.swift",
             ]
         ),
         .testTarget(name: "RedTaskTests", dependencies: ["RedTaskCore"], path: "RedTaskTests", resources: [.copy("vectors.json"), .copy("wiki-table.txt")]),

@@ -17,10 +17,11 @@ struct WikiRef: Hashable {
     var title: String
 }
 
-/// Раздел проекта в колонке детали: веха (доска/список) или страница вики.
+/// Колонка детали: веха (доска/список), страница вики или задачи по запросу (spec 17).
 enum ProjectPage: Hashable {
     case version(Version)
     case wiki(WikiRef)
+    case query(QueryRun)
 }
 
 /// iPhone — таб-бар, iPad — таб-бар, превращаемый в сайдбар; внутри раздела — split view «список ↔ задача».
@@ -32,19 +33,19 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             Tab("My", systemImage: "person.crop.circle", value: AppTab.mine) {
-                TabSection(tab: .mine, sheet: $sheet) { sel in IssueListView(kind: .mine, selection: sel) }
+                TabSection(tab: .mine, sheet: $sheet) { sel, _ in IssueListView(kind: .mine, selection: sel) }
             }
             Tab("Watching", systemImage: "eye", value: AppTab.watched) {
-                TabSection(tab: .watched, sheet: $sheet) { sel in IssueListView(kind: .watched, selection: sel) }
+                TabSection(tab: .watched, sheet: $sheet) { sel, _ in IssueListView(kind: .watched, selection: sel) }
             }
             Tab("Favorites", systemImage: "star", value: AppTab.favorites) {
-                TabSection(tab: .favorites, sheet: $sheet) { sel in IssueListView(kind: .favorites, selection: sel) }
+                TabSection(tab: .favorites, sheet: $sheet) { sel, page in IssueListView(kind: .favorites, selection: sel, page: page) }
             }
             Tab("Projects", systemImage: "folder", value: AppTab.projects) {
-                TabSection(tab: .projects, sheet: $sheet, projects: true) { sel in EmptyView() }
+                TabSection(tab: .projects, sheet: $sheet, projects: true) { _, _ in EmptyView() }
             }
             Tab(value: AppTab.search, role: .search) {
-                TabSection(tab: .search, sheet: $sheet) { sel in SearchView(selection: sel) }
+                TabSection(tab: .search, sheet: $sheet) { sel, _ in SearchView(selection: sel) }
             }
         }
         .tabViewStyle(.sidebarAdaptable)
@@ -98,7 +99,8 @@ struct RootView: View {
         @Binding var sheet: RootSheet?
         /// Проекты — три колонки: проекты → задачи проекта → задача (на iPhone — один стек).
         var projects = false
-        @ViewBuilder let content: (Binding<Int?>) -> Content
+        /// Список вкладки: выбранная задача и страница детали (избранный запрос, spec 17.5).
+        @ViewBuilder let content: (Binding<Int?>, Binding<ProjectPage?>) -> Content
         @State private var projectPath: [Project] = []
         /// На iPhone переход из уведомления/ссылки показывает сразу задачу, минуя список.
         @State private var compactColumn = NavigationSplitViewColumn.sidebar
@@ -119,7 +121,7 @@ struct RootView: View {
                         // переход по стеку, а не выделением в списке: выделение в свёрнутом split view (iPhone)
                         // сразу уводит в колонку детали, минуя задачи проекта
                         NavigationStack(path: $projectPath) {
-                            ProjectsView()
+                            ProjectsView(page: $page)
                                 .toolbar { RootToolbar(sheet: $sheet) }
                                 .toolbar(removing: .sidebarToggle)
                                 // фон стека — прозрачный, как у колонки списка в остальных разделах
@@ -134,7 +136,7 @@ struct RootView: View {
                     .navigationSplitViewStyle(.balanced)
                 } else {
                     NavigationSplitView(preferredCompactColumn: $compactColumn) {
-                        content($selection)
+                        content($selection, $page)
                             .toolbar { RootToolbar(sheet: $sheet) }
                             // у таб-бара iPad уже есть своя кнопка сайдбара — вторая рядом только путает
                             .toolbar(removing: .sidebarToggle)
@@ -153,6 +155,8 @@ struct RootView: View {
                 compactColumn = .detail
             }
             .onChange(of: projectPath) { page = nil }
+            // iPhone: назад к списку — страница снята, тот же запрос открывается повторным нажатием
+            .onChange(of: compactColumn) { _, c in if c == .sidebar { page = nil } }
             .onChange(of: app.openRequest) { _, r in handle(r) }
             .onAppear { handle(app.openRequest) }
             #if DEBUG
@@ -181,6 +185,7 @@ struct RootView: View {
                     switch page {
                     case .version(let v): VersionView(version: v).id(v.id)
                     case .wiki(let w): WikiPageView(ref: w).id(w)
+                    case .query(let r): FilteredIssuesView(run: r).id(r)
                     case nil:
                         if let id = selection {
                             IssueDetailView(issueId: id, fragment: fragment, newSubtask: { sheet = .newIssue(project: $0.project.id, parent: $0.id) })

@@ -82,6 +82,11 @@ struct AppSettings: Codable, Sendable, Equatable {
     var versionBoard = false
     /// Недавние в поиске (spec 9): задачи, открытые из результатов, свежие первыми, не больше 10.
     var recentIssues: [RecentIssue] = []
+    /// Запросы, сохранённые у себя (spec 17.3); недавние фильтры — до 10 (17.2); избранные запросы по порядку (17.5).
+    /// Данные человека, а не кэш: очистка кэша их не трогает, выход стирает.
+    var localQueries: [LocalQuery] = []
+    var recentFilters: [IssueFilter] = []
+    var favoriteQueries: [QueryRun] = []
 
     var isLoggedIn: Bool { !serverURL.isEmpty && userId != 0 }
     var account: String { "\(serverURL)#\(userId)" }
@@ -345,6 +350,14 @@ actor RefData {
     func versions(_ projectId: Int, force: Bool = false) async throws -> [Version] {
         try await cached("versions-\(projectId)", force: force) { try await $0.versions(projectId) }
     }
+
+    /// Каталог фильтров проекта (spec 17.1; nil — без проекта): сутки, раздел «Справочники».
+    func filterCatalog(_ projectId: Int?, force: Bool = false) async throws -> FilterCatalog {
+        try await cached("filters-\(projectId ?? 0)", force: force) { try await $0.filterCatalog(projectId: projectId) }
+    }
+    /// Каталог из кэша любого возраста — экран фильтра показывает его сразу.
+    func staleFilterCatalog(_ projectId: Int?) -> FilterCatalog? { stale("filters-\(projectId ?? 0)") }
+    func roles(force: Bool = false) async throws -> [Named] { try await cached("roles", force: force) { try await $0.roles() } }
 
     /// Профиль человека: память → диск (24 ч) → сеть; отказ сервера помним 10 минут.
     func person(_ userId: Int, force: Bool = false) async throws -> Person {

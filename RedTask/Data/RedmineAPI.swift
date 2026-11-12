@@ -550,39 +550,119 @@ final class RedmineAPI: Sendable {
      (или уводит на вход) — WebSessionRequired. Возвращает Set-Cookie ответов: сессия Redmine обновляется.
      */
     func setFavorite(_ issueId: Int, _ on: Bool, cookie: String, userAgent: String) async throws -> [HTTPCookie] {
-        func web(_ path: String, _ method: String, _ query: [(String, String?)], _ headers: [String: String], cookie: String) async throws -> (String, HTTPURLResponse) {
-            var r = URLRequest(url: url(path, query))
-            r.httpMethod = method
-            r.setValue(cookie, forHTTPHeaderField: "Cookie")
-            r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
-            for (k, v) in headers { r.setValue(v, forHTTPHeaderField: k) }
-            let (data, http) = try await perform(r, session: noRedirectSession)
-            return (String(decoding: data, as: UTF8.self), http)
-        }
-        var cookies: [HTTPCookie] = []
-        func take(_ http: HTTPURLResponse) {
-            let h = http.allHeaderFields.reduce(into: [String: String]()) { d, kv in
-                if let k = kv.key as? String, let v = kv.value as? String { d[k] = v }
-            }
-            cookies += HTTPCookie.cookies(withResponseHeaderFields: h, for: http.url ?? baseURL)
-        }
-        let (page, ph) = try await web("issues/\(issueId)", "GET", [], ["Accept": "text/html"], cookie: cookie)
-        take(ph)
+        let (page, ph, c1) = try await web("issues/\(issueId)", cookie: cookie, userAgent: userAgent)
         // задачи нет или она закрыта от меня — звезду не поставить ни с какой сессией
         if ph.statusCode == 404 || ph.statusCode == 403 { throw RedmineError(code: ph.statusCode, message: String(localized: "Not found")) }
         guard ph.statusCode == 200, page.contains("id=\"loggedas\""), let token = csrfToken(page) else { throw WebSessionRequired() }
         // звезду мог уже поставить/снять другой клиент: нужное состояние — запрос не шлём
-        if pageFavoriteState(page, issueId: issueId) == on { return cookies }
-        let (_, fh) = try await web("favourites/fav", on ? "POST" : "DELETE",
-                                    [("object_id", String(issueId)), ("object_type", "issue")],
-                                    ["X-CSRF-Token": token, "X-Requested-With": "XMLHttpRequest",
-                                     "Accept": "text/javascript, application/javascript"],
-                                    cookie: mergeCookies(cookie, cookies))
-        take(fh)
+        if pageFavoriteState(page, issueId: issueId) == on { return c1 }
+        let (_, fh, c2) = try await web("favourites/fav", method: on ? "POST" : "DELETE",
+                                        query: [("object_id", String(issueId)), ("object_type", "issue")],
+                                        headers: ["X-CSRF-Token": token, "X-Requested-With": "XMLHttpRequest",
+                                                  "Accept": "text/javascript, application/javascript"],
+                                        cookie: mergeCookies(cookie, c1), userAgent: userAgent)
         switch fh.statusCode {
-        case 200..<300: return cookies
+        case 200..<300: return c1 + c2
         case 401, 302, 422: throw WebSessionRequired()
         default: throw RedmineError(code: fh.statusCode, message: "HTTP \(fh.statusCode)")
+        }
+    }
+
+    /// Запрос под веб-сессией сайта (куки WebView), без редиректов: тело, ответ и Set-Cookie ответа.
+    private func web(_ path: String, method: String = "GET", query: [(String, String?)] = [], form: [(String, String)]? = nil,
+                     headers: [String: String] = ["Accept": "text/html"], cookie: String, userAgent: String) async throws -> (String, HTTPURLResponse, [HTTPCookie]) {
+        var r = URLRequest(url: url(path, query))
+        r.httpMethod = method
+        r.setValue(cookie, forHTTPHeaderField: "Cookie")
+        r.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        for (k, v) in headers { r.setValue(v, forHTTPHeaderField: k) }
+        if let form {
+            r.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            r.httpBody = formEncode(form)
+        }
+        let (data, http) = try await perform(r, session: noRedirectSession)
+        let h = http.allHeaderFields.reduce(into: [String: String]()) { d, kv in
+            if let k = kv.key as? String, let v = kv.value as? String { d[k] = v }
+        }
+        return (String(decoding: data, as: UTF8.self), http, HTTPCookie.cookies(withResponseHeaderFields: h, for: http.url ?? baseURL))
+    }
+
+    // MARK: фильтры и сохранённые запросы (spec 17)
+
+    /// Задачи по своему фильтру или сохранённому запросу (spec 17.2, 17.4).
+    func issues(_ f: IssueFilter, offset: Int, limit: Int = 50) async throws -> IssuesResponse {
+        try await get("issues.json", f.params(limit: limit, offset: offset).map { ($0.0, $0.1 as String?) })
+    }
+
+    /// Каталог фильтров со страницы задач проекта (без проекта — /issues), Basic-ключом, как страница задачи.
+    func filterCatalog(projectId: Int?) async throws -> FilterCatalog {
+        let (data, http) = try await htmlPage(projectId.map { "projects/\($0)/issues" } ?? "issues")
+        guard (200..<300).contains(http.statusCode) else { throw RedmineError(code: http.statusCode, message: "HTTP \(http.statusCode)") }
+        let c = FilterCatalog(html: String(decoding: data, as: UTF8.self))
+        if c.filters.isEmpty { throw RedmineError(code: 200, message: String(localized: "Unexpected response from server")) }
+        return c
+    }
+
+    /// Все сохранённые запросы, видимые мне (queries.json, страницами).
+    func queries() async throws -> [ServerQuery] {
+        var out: [ServerQuery] = []
+        while true {
+            let page: QueriesResponse = try await get("queries.json", [("limit", "100"), ("offset", String(out.count))])
+            out += page.queries
+            // ponytail: потолок 2000 запросов
+            if page.queries.isEmpty || out.count >= page.totalCount || out.count >= 2000 { break }
+        }
+        return out
+    }
+
+    func roles() async throws -> [Named] { try await (get("roles.json") as RolesResponse).roles }
+
+    /// Токен формы со страницы «новый запрос»; нет входа на сайте — WebSessionRequired, капча WAF — сбой связи.
+    private func queryFormToken(_ projectId: Int?, cookie: String, userAgent: String) async throws -> (String, [HTTPCookie]) {
+        let (page, h, c) = try await web(projectId.map { "projects/\($0)/queries/new" } ?? "queries/new", cookie: cookie, userAgent: userAgent)
+        if h.statusCode == 200 && h.value(forHTTPHeaderField: "X-Request-Id") == nil {
+            throw RedmineError(code: 0, message: String(localized: "The server asks for a captcha (Security check)"))
+        }
+        if h.statusCode == 403 { throw RedmineError(code: 403, message: String(localized: "The server doesn’t allow saving queries")) }
+        guard h.statusCode == 200, page.contains("id=\"loggedas\""), let token = csrfToken(page) else { throw WebSessionRequired() }
+        return (token, c)
+    }
+
+    /**
+     Сохранение запроса веб-формой сайта (spec 17.3): REST запросы не пишет. Новый — POST /projects/{id}/queries,
+     правка — POST /queries/{id} с _method=patch. Успех — 302 на список задач с query_id. Возвращает id и Set-Cookie.
+     */
+    func saveQuery(_ q: LocalQuery, cookie: String, userAgent: String) async throws -> (Int, [HTTPCookie]) {
+        let (token, c1) = try await queryFormToken(q.projectId, cookie: cookie, userAgent: userAgent)
+        var form = [("authenticity_token", token)]
+        if q.serverId != nil { form.append(("_method", "patch")) }
+        form += q.formFields
+        let path = q.serverId.map { "queries/\($0)" } ?? (q.projectId.map { "projects/\($0)/queries" } ?? "queries")
+        let (body, h, c2) = try await web(path, method: "POST", form: form, cookie: mergeCookies(cookie, c1), userAgent: userAgent)
+        switch h.statusCode {
+        case 301...303:
+            let loc = h.value(forHTTPHeaderField: "Location") ?? ""
+            if let id = savedQueryId(loc) { return (id, c1 + c2) }
+            if loc.contains("/login") { throw WebSessionRequired() }
+            throw RedmineError(code: h.statusCode, message: String(localized: "Unexpected response from server"))
+        case 401: throw WebSessionRequired()
+        case 404 where q.serverId != nil: throw RedmineError(code: 404, message: String(localized: "Not found"))
+        default:
+            if let e = formErrors(body) { throw RedmineError(code: 422, message: e) }
+            throw RedmineError(code: h.statusCode, message: "HTTP \(h.statusCode)")
+        }
+    }
+
+    /// Удаление запроса на сервере: POST /queries/{id} с _method=delete. Уже нет (404) — тоже успех.
+    func deleteQuery(_ id: Int, projectId: Int?, cookie: String, userAgent: String) async throws -> [HTTPCookie] {
+        let (token, c1) = try await queryFormToken(projectId, cookie: cookie, userAgent: userAgent)
+        let (_, h, c2) = try await web("queries/\(id)", method: "POST", form: [("authenticity_token", token), ("_method", "delete")],
+                                       cookie: mergeCookies(cookie, c1), userAgent: userAgent)
+        let loc = h.value(forHTTPHeaderField: "Location") ?? ""
+        switch h.statusCode {
+        case 301...303 where !loc.contains("/login"), 404: return c1 + c2
+        case 301...303, 401: throw WebSessionRequired()
+        default: throw RedmineError(code: h.statusCode, message: "HTTP \(h.statusCode)")
         }
     }
 

@@ -2,11 +2,12 @@ import SwiftUI
 
 /// Разделы экрана проекта (spec 2.2) — в этом порядке; модуль nil — раздел есть всегда.
 enum ProjectSection: String, CaseIterable, Identifiable {
-    case issues, overview, versions, wiki, files
+    case issues, queries, overview, versions, wiki, files
     var id: String { rawValue }
     var title: LocalizedStringKey {
         switch self {
         case .issues: "Issues"
+        case .queries: "Queries"
         case .overview: "Overview"
         case .versions: "Versions"
         case .wiki: "Wiki"
@@ -16,6 +17,7 @@ enum ProjectSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .issues: "checklist"
+        case .queries: "line.3.horizontal.decrease.circle"
         case .overview: "info.circle"
         case .versions: "flag.checkered"
         case .wiki: "book.closed"
@@ -24,7 +26,7 @@ enum ProjectSection: String, CaseIterable, Identifiable {
     }
     var module: String? {
         switch self {
-        case .issues, .versions: "issue_tracking"
+        case .issues, .queries, .versions: "issue_tracking"
         case .overview: nil
         case .wiki: "wiki"
         case .files: "files"
@@ -58,6 +60,7 @@ struct ProjectView: View {
         Group {
             switch shown {
             case .issues: IssueListView(kind: .project(project.id, project.name), selection: $selection)
+            case .queries: ProjectQueries(projectId: project.id, page: $page)
             case .overview: ProjectOverview(project: full ?? project)
             case .versions: VersionsList(project: project, page: $page) { hidden.insert(.versions) }
             case .wiki: WikiIndex(project: project, page: $page) { hidden.insert(.wiki) }

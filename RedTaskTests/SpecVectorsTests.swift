@@ -234,4 +234,43 @@ struct SpecVectorsTests {
             }
         }
     }
+
+    private func conds(_ a: Any?) -> [FilterCond] {
+        (a as! [[String: Any]]).map { FilterCond(field: $0["field"] as! String, op: $0["op"] as! String, values: $0["values"] as! [String]) }
+    }
+    private func sorts(_ a: Any?) -> [SortCrit] { (a as! [[String]]).map { SortCrit(field: $0[0], dir: $0[1]) } }
+    private func pairs(_ p: [(String, String)]) -> [String] { p.map { "\($0.0)=\($0.1)" } }
+    private func expected(_ a: Any?) -> [String] { (a as! [[String]]).map { "\($0[0])=\($0[1])" } }
+
+    @Test func filterCatalogCase() {
+        let s = section("filter_catalog")
+        let out = filterCatalog(s["html"] as! String)
+        let want = s["expected"] as! [[String: Any]]
+        #expect(out.map(\.field) == want.map { $0["field"] as! String })
+        for (o, w) in zip(out, want) {
+            #expect(o.name == w["name"] as! String && o.type == w["type"] as! String && o.ops == w["ops"] as! [String], "\(o.field)")
+            #expect(o.values == w["values"] as! [[String]] && o.remote == w["remote"] as! Bool, "\(o.field)")
+        }
+    }
+
+    @Test func filterParamsCases() {
+        for c in cases("filter_params") {
+            #expect(pairs(filterParams(conds(c["filters"]), sort: sorts(c["sort"]))) == expected(c["expected"]))
+        }
+    }
+
+    @Test func queryFormCases() {
+        for c in cases("query_form") {
+            let out = queryFormFields(name: c["name"] as! String, description: c["description"] as! String, visibility: c["visibility"] as! Int,
+                                      roleIds: c["role_ids"] as! [Int], forAll: c["for_all"] as! Bool,
+                                      filters: conds(c["filters"]), sort: sorts(c["sort"]))
+            #expect(pairs(out) == expected(c["expected"]), "\(c["name"]!)")
+        }
+    }
+
+    @Test func querySavedCases() {
+        for c in section("query_saved")["cases"] as! [[Any]] {
+            #expect(savedQueryId(c[0] as! String) == c[1] as? Int, "\(c[0])")
+        }
+    }
 }
